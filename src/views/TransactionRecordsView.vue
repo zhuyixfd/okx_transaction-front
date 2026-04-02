@@ -1,7 +1,7 @@
 <template>
   <div class="page">
-    <h1 class="title">配置信息</h1>
-    <p class="desc">这里放置配置信息相关内容。</p>
+    <h1 class="title">交易记录</h1>
+    <p class="desc">这里放置交易记录相关内容。</p>
   </div>
 </template>
 
@@ -20,3 +20,4 @@
   opacity: 0.8;
 }
 </style>
+
