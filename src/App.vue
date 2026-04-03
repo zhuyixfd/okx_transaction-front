@@ -1,9 +1,10 @@
 <script setup>
 import { computed } from 'vue'
-import { useRoute, RouterLink, RouterView } from 'vue-router'
+import { useRoute, RouterView } from 'vue-router'
 
 const route = useRoute()
 const isLoginPage = computed(() => route.name === 'login')
+const isFollowDetail = computed(() => route.name === 'followDetail')
 </script>
 
 <template>
@@ -12,22 +13,13 @@ const isLoginPage = computed(() => route.name === 'login')
     <RouterView />
   </div>
 
-  <!-- 业务页：侧栏 + 跟单帐户 / 交易记录 / 配置信息 -->
-  <div v-else class="app-shell">
-    <aside class="sidebar">
-      <nav class="nav">
-        <RouterLink class="nav-item" to="/" end>
-          跟单帐户
-        </RouterLink>
-        <RouterLink class="nav-item" to="/records">
-          交易记录
-        </RouterLink>
-        <RouterLink class="nav-item" to="/settings">
-          配置信息
-        </RouterLink>
-      </nav>
-    </aside>
+  <!-- 跟单详情：无主导航，页面自管左侧用户列表 -->
+  <div v-else-if="isFollowDetail" class="follow-detail-shell">
+    <RouterView />
+  </div>
 
+  <!-- 业务页：跟单帐户主页（无侧栏） -->
+  <div v-else class="app-shell">
     <main class="content">
       <RouterView />
     </main>
@@ -46,38 +38,22 @@ const isLoginPage = computed(() => route.name === 'login')
   background: var(--color-background);
 }
 
-.app-shell {
+.follow-detail-shell {
   min-height: 100vh;
-  display: flex;
+  width: 100%;
   background: var(--color-background);
 }
 
-.sidebar {
-  width: 220px;
-  border-right: 1px solid var(--color-border);
-  padding: 16px;
-}
-
-.nav {
+.app-shell {
+  min-height: 100vh;
   display: flex;
   flex-direction: column;
-  gap: 8px;
-}
-
-.nav-item {
-  padding: 10px 12px;
-  border-radius: 10px;
-  color: var(--color-text);
-  text-decoration: none;
-}
-
-.nav-item.router-link-active {
-  background: var(--color-background-mute);
-  border: 1px solid var(--color-border-hover);
+  background: var(--color-background);
 }
 
 .content {
   flex: 1;
+  min-width: 0;
   padding: 24px;
 }
 </style>

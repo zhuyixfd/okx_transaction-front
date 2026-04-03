@@ -1,6 +1,5 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import HomeView from '../views/HomeView.vue'
-import AboutView from '../views/AboutView.vue'
 import LoginView from '../views/LoginView.vue'
 
 /** 与登录页写入的 key 保持一致 */
@@ -20,14 +19,10 @@ const router = createRouter({
       component: LoginView,
     },
     {
-      path: '/records',
-      name: 'records',
-      component: () => import('../views/TransactionRecordsView.vue'),
-    },
-    {
-      path: '/settings',
-      name: 'settings',
-      component: AboutView,
+      path: '/detail/:uniqueName',
+      name: 'followDetail',
+      component: () => import('../views/FollowDetailView.vue'),
+      props: true,
     },
   ],
 })

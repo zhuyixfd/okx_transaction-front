@@ -85,9 +85,7 @@ const handleLogin = async () => {
       </div>
 
       <div v-if="error" class="err">{{ error }}</div>
-      <div class="hint">
-        默认账号：<code>admin</code> / <code>admin123456</code>
-      </div>
+      <div class="hint">请使用已在数据库中创建的用户登录。</div>
     </div>
   </div>
 </template>
