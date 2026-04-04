@@ -157,7 +157,7 @@ const simRecordsSectionHint =
 
 /** 悬停「开仓 / 平仓记录」标题 */
 const eventsSectionHint =
-  '每 2 秒静默刷新当前页数据。仅当 posId 出现/消失时写入记录；未平仓行标记价与更新时间随快照刷新，已平仓则固定为写入时的值。'
+  '每 2 秒静默刷新当前页数据。仅当 posId 出现/消失时写入记录；未平仓行标记价等随快照刷新。平仓时间仅在「平仓」事件行显示。'
 
 let pollTimer: ReturnType<typeof setInterval> | null = null
 
@@ -766,14 +766,10 @@ const formatUplUsdt = (raw: string | null | undefined): string =>
 const uplCellClass = (raw: string | null | undefined): string =>
   roiClassFromTone(toneFromNumber(parsePnlString(raw)))
 
-/**
- * 已平仓：更新时间为该行记录时间（不随轮询变）；未平仓且仍在快照中：为快照刷新时间。
- */
-const eventHistoryUpdateTime = (e: PositionEventRow): string | null => {
-  if (positionClosedForEvent(e)) return e.created_at
-  const pid = e.pos_id
-  if (!pid) return null
-  return snapshot.value?.refreshed_at ?? null
+/** 平仓时间：仅 event_type=close 的行展示（写入时间即平仓落库时间）；开仓行、未平仓不展示 */
+const eventCloseTimeForCell = (e: PositionEventRow): string => {
+  if (e.event_type !== 'close') return ''
+  return formatTime(e.created_at)
 }
 
 /** 展示用盈亏：在跟为浮动，已平仓为已实现 */
@@ -1075,7 +1071,7 @@ const eventPnlTone = (e: PositionEventRow): PnlTone => {
                     <th>标记价</th>
                     <th>收益率</th>
                     <th>盈亏（USDT）</th>
-                    <th>更新/平仓时间</th>
+                    <th>平仓时间</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -1102,7 +1098,7 @@ const eventPnlTone = (e: PositionEventRow): PnlTone => {
                     >{{ eventMarkPx(e) }}</td>
                     <td :class="roiClassFromTone(eventPnlTone(e))">{{ eventRoiDisplay(e) }}</td>
                     <td :class="uplCellClass(eventUplRaw(e))">{{ formatUplUsdt(eventUplRaw(e)) }}</td>
-                    <td class="nowrap sm">{{ formatTime(eventHistoryUpdateTime(e)) }}</td>
+                    <td class="nowrap sm">{{ eventCloseTimeForCell(e) }}</td>
                   </tr>
                 </tbody>
               </table>
