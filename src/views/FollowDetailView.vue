@@ -458,6 +458,35 @@ const pnlToneFromAvgMark = (
   return 'zero'
 }
 
+/**
+ * 收益率（%）：与盈亏方向一致。多 (mark−avg)/avg×100；空 (avg−mark)/avg×100。
+ * mark 可为展示用字符串（含 —）。
+ */
+const formatRoiPct = (
+  avgPx: string | null | undefined,
+  markPx: string | number | null | undefined,
+  posSide: string | null | undefined,
+): string => {
+  const avg = Number(String(avgPx ?? '').trim())
+  const mRaw =
+    markPx === null || markPx === undefined || markPx === '' || markPx === '—'
+      ? NaN
+      : Number(String(markPx).trim())
+  if (!Number.isFinite(avg) || !Number.isFinite(mRaw) || avg === 0) return '—'
+  const side = (posSide ?? '').toLowerCase()
+  const rel = side === 'short' ? (avg - mRaw) / avg : (mRaw - avg) / avg
+  const pct = rel * 100
+  const sign = pct > 0 ? '+' : ''
+  return `${sign}${pct.toFixed(2)}%`
+}
+
+const roiClassFromTone = (t: PnlTone): string => {
+  if (t === 'pos') return 'mono sm roi-pct roi-pct-pos'
+  if (t === 'neg') return 'mono sm roi-pct roi-pct-neg'
+  if (t === 'zero') return 'mono sm roi-pct roi-pct-zero'
+  return 'mono sm roi-pct text-muted'
+}
+
 const rowClassFromPnlTone = (t: PnlTone): string => {
   if (t === 'pos') return 'row-pnl-pos'
   if (t === 'neg') return 'row-pnl-neg'
@@ -923,6 +952,7 @@ const eventPnlTone = (e: PositionEventRow): PnlTone => {
                     <th>杠杆</th>
                     <th>开仓均价</th>
                     <th>标记价</th>
+                    <th>收益率</th>
                     <th>开仓时间</th>
                     <th>更新时间</th>
                   </tr>
@@ -942,6 +972,7 @@ const eventPnlTone = (e: PositionEventRow): PnlTone => {
                     <td>{{ formatLever(row.p.lever) }}</td>
                     <td class="mono sm">{{ formatAvgPx(row.p.avg_px) }}</td>
                     <td class="mono sm mark-col">{{ row.p.last_px ?? '—' }}</td>
+                    <td :class="roiClassFromTone(row.tone)">{{ formatRoiPct(row.p.avg_px, row.p.last_px, row.p.pos_side) }}</td>
                     <td class="nowrap sm">{{ row.p.c_time_format ?? '—' }}</td>
                     <td class="nowrap sm">{{ formatTime(snapshot.refreshed_at) }}</td>
                   </tr>
@@ -1134,6 +1165,7 @@ const eventPnlTone = (e: PositionEventRow): PnlTone => {
                     <th>获取/开仓时间</th>
                     <th>开仓均价</th>
                     <th>标记价</th>
+                    <th>收益率</th>
                     <th>更新/平仓时间</th>
                   </tr>
                 </thead>
@@ -1159,6 +1191,7 @@ const eventPnlTone = (e: PositionEventRow): PnlTone => {
                       class="mono sm"
                       :class="{ 'mark-col': !positionClosedForEvent(e) }"
                     >{{ eventMarkPx(e) }}</td>
+                    <td :class="roiClassFromTone(eventPnlTone(e))">{{ formatRoiPct(e.avg_px, eventMarkPx(e), e.pos_side) }}</td>
                     <td class="nowrap sm">{{ formatTime(eventHistoryUpdateTime(e)) }}</td>
                   </tr>
                 </tbody>
@@ -1620,6 +1653,17 @@ const eventPnlTone = (e: PositionEventRow): PnlTone => {
 
 .mark-col {
   font-weight: 600;
+}
+
+/* 收益率列：等宽数字；行已着色时加粗即可 */
+.roi-pct {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.roi-pct-pos,
+.roi-pct-neg {
+  font-weight: 700;
 }
 
 /* 盈亏行：盈绿、亏红、平灰（覆盖 Bootstrap 条纹） */
