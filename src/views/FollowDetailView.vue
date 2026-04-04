@@ -123,15 +123,6 @@ const simTotalPnl = ref('')
 const simRealizedSum = ref('')
 const simUnrealizedSum = ref('')
 
-/** 监控持仓/开平仓维度盈亏汇总（与后端 position-pnl-summary 一致） */
-type PnlTotalsBlock = {
-  total_pnl_usdt: string
-  realized_sum_usdt: string
-  unrealized_sum_usdt: string
-}
-const pnlSummary = ref<{ holdings: PnlTotalsBlock; ledger: PnlTotalsBlock } | null>(null)
-const pnlSummaryError = ref('')
-
 const followCfg = ref<FollowCfgForm>({
   bet_amount_per_position: null,
   max_follow_positions: null,
@@ -154,7 +145,7 @@ const maxFollowPositionsLabelHint =
 
 /** 悬停「当前持仓」标题 */
 const snapshotSectionHint =
-  '每 2 秒静默请求快照接口（不整页刷新）。标记价来自库表 follow_position_snapshots，启用时由后台轮询更新。下方总收益按「每个仓位下注金额」估算浮动，与模拟跟单公式一致；当前无平仓故已实现恒为 0。'
+  '每 2 秒静默请求快照接口（不整页刷新）。标记价来自库表 follow_position_snapshots，启用时由后台轮询更新。'
 
 /** 悬停「跟单记录（模拟）」标题 */
 const simRecordsSectionHint =
@@ -162,7 +153,7 @@ const simRecordsSectionHint =
 
 /** 悬停「开仓 / 平仓记录」标题 */
 const eventsSectionHint =
-  '每 2 秒静默刷新当前页数据。仅当 posId 出现/消失时写入记录；未平仓行标记价与更新时间随快照刷新，已平仓则固定为写入时的值。下方总收益为全部平仓事件已实现合计 + 当前快照浮动，按「每个仓位下注金额」估算，与模拟跟单公式一致。'
+  '每 2 秒静默刷新当前页数据。仅当 posId 出现/消失时写入记录；未平仓行标记价与更新时间随快照刷新，已平仓则固定为写入时的值。'
 
 let pollTimer: ReturnType<typeof setInterval> | null = null
 
@@ -285,40 +276,6 @@ const loadSnapshot = async (silent = false) => {
   }
 }
 
-const loadPnlSummary = async (silent = false) => {
-  const un = paramUniqueName.value
-  if (!un) {
-    pnlSummary.value = null
-    pnlSummaryError.value = ''
-    return
-  }
-  if (!silent) pnlSummaryError.value = ''
-  try {
-    const params = new URLSearchParams({ unique_name: un })
-    const res = await fetch(`${API_BASE}/follow-accounts/position-pnl-summary?${params}`, {
-      headers: authHeaders(),
-    })
-    if (!res.ok) {
-      if (!silent) {
-        pnlSummaryError.value =
-          (await res.json().catch(() => ({}))).detail || `加载失败 (${res.status})`
-      }
-      return
-    }
-    const data = (await res.json()) as { holdings?: PnlTotalsBlock; ledger?: PnlTotalsBlock }
-    if (data?.holdings && data?.ledger) {
-      pnlSummary.value = { holdings: data.holdings, ledger: data.ledger }
-      pnlSummaryError.value = ''
-    } else {
-      pnlSummary.value = null
-    }
-  } catch (e: unknown) {
-    if (!silent) {
-      pnlSummaryError.value = e instanceof Error ? e.message : '网络错误'
-    }
-  }
-}
-
 const loadSimRecords = async (silent = false) => {
   const un = paramUniqueName.value
   if (!un) {
@@ -391,13 +348,11 @@ onMounted(() => {
   void loadList(false).then(() => {
     void loadEvents(false)
     void loadSnapshot(false)
-    void loadPnlSummary(false)
     void loadSimRecords(false)
   })
   pollTimer = setInterval(() => {
     void loadEvents(true)
     void loadSnapshot(true)
-    void loadPnlSummary(true)
     void loadSimRecords(true)
     void loadList(true)
   }, 2000)
@@ -415,7 +370,6 @@ watch(paramUniqueName, () => {
   simPage.value = 1
   void loadEvents(false)
   void loadSnapshot(false)
-  void loadPnlSummary(false)
   void loadSimRecords(false)
 })
 
@@ -540,25 +494,6 @@ const simTotalPnlTone = computed(() => toneFromSumString(simTotalPnl.value))
 const simRealizedPnlTone = computed(() => toneFromSumString(simRealizedSum.value))
 
 const simUnrealizedPnlTone = computed(() => toneFromSumString(simUnrealizedSum.value))
-
-const holdingsTotalTone = computed(() =>
-  pnlSummary.value ? toneFromSumString(pnlSummary.value.holdings.total_pnl_usdt) : 'neutral',
-)
-const holdingsRealizedTone = computed(() =>
-  pnlSummary.value ? toneFromSumString(pnlSummary.value.holdings.realized_sum_usdt) : 'neutral',
-)
-const holdingsUnrealizedTone = computed(() =>
-  pnlSummary.value ? toneFromSumString(pnlSummary.value.holdings.unrealized_sum_usdt) : 'neutral',
-)
-const ledgerTotalTone = computed(() =>
-  pnlSummary.value ? toneFromSumString(pnlSummary.value.ledger.total_pnl_usdt) : 'neutral',
-)
-const ledgerRealizedTone = computed(() =>
-  pnlSummary.value ? toneFromSumString(pnlSummary.value.ledger.realized_sum_usdt) : 'neutral',
-)
-const ledgerUnrealizedTone = computed(() =>
-  pnlSummary.value ? toneFromSumString(pnlSummary.value.ledger.unrealized_sum_usdt) : 'neutral',
-)
 
 const goSimPrev = () => {
   if (simPage.value <= 1) return
@@ -913,7 +848,6 @@ const eventPnlTone = (e: PositionEventRow): PnlTone => {
       <template v-else>
         <div class="detail-main-grid detail-two-col">
           <div class="detail-col-main">
-            <div v-if="pnlSummaryError" class="aside-err subsection-gap">{{ pnlSummaryError }}</div>
             <section class="card-block snapshot-card">
           <h2 class="mb-3 detail-panel-title">
             <span
@@ -921,42 +855,6 @@ const eventPnlTone = (e: PositionEventRow): PnlTone => {
               :title="snapshotSectionHint"
             >当前持仓</span>
           </h2>
-          <div v-if="pnlSummary" class="sim-totals subsection-gap">
-            <span class="sim-total-pill">
-              总收益（USDT）<strong
-                class="mono sim-total-pnl-val"
-                :class="{
-                  'sim-total-pnl-pos': holdingsTotalTone === 'pos',
-                  'sim-total-pnl-neg': holdingsTotalTone === 'neg',
-                  'sim-total-pnl-zero': holdingsTotalTone === 'zero',
-                  'sim-total-pnl-neutral': holdingsTotalTone === 'neutral',
-                }"
-              >{{ formatUsdt3(pnlSummary.holdings.total_pnl_usdt) }}</strong>
-            </span>
-            <span class="sim-total-meta small">
-              <span class="text-muted">已实现 </span>
-              <strong
-                class="mono sim-sub-pnl-val"
-                :class="{
-                  'sim-total-pnl-pos': holdingsRealizedTone === 'pos',
-                  'sim-total-pnl-neg': holdingsRealizedTone === 'neg',
-                  'sim-total-pnl-zero': holdingsRealizedTone === 'zero',
-                  'sim-total-pnl-neutral': holdingsRealizedTone === 'neutral',
-                }"
-              >{{ formatUsdt3(pnlSummary.holdings.realized_sum_usdt) }}</strong>
-              <span class="text-muted"> · </span>
-              <span class="text-muted">浮动 </span>
-              <strong
-                class="mono sim-sub-pnl-val"
-                :class="{
-                  'sim-total-pnl-pos': holdingsUnrealizedTone === 'pos',
-                  'sim-total-pnl-neg': holdingsUnrealizedTone === 'neg',
-                  'sim-total-pnl-zero': holdingsUnrealizedTone === 'zero',
-                  'sim-total-pnl-neutral': holdingsUnrealizedTone === 'neutral',
-                }"
-              >{{ formatUsdt3(pnlSummary.holdings.unrealized_sum_usdt) }}</strong>
-            </span>
-          </div>
           <div v-if="snapshotLoading && !snapshot" class="muted">加载快照中…</div>
           <div v-else-if="snapshotError" class="aside-err">{{ snapshotError }}</div>
           <template v-else-if="snapshot">
@@ -1135,42 +1033,6 @@ const eventPnlTone = (e: PositionEventRow): PnlTone => {
               :title="eventsSectionHint"
             >开平仓记录</span>
           </h2>
-          <div v-if="pnlSummary" class="sim-totals subsection-gap">
-            <span class="sim-total-pill">
-              总收益（USDT）<strong
-                class="mono sim-total-pnl-val"
-                :class="{
-                  'sim-total-pnl-pos': ledgerTotalTone === 'pos',
-                  'sim-total-pnl-neg': ledgerTotalTone === 'neg',
-                  'sim-total-pnl-zero': ledgerTotalTone === 'zero',
-                  'sim-total-pnl-neutral': ledgerTotalTone === 'neutral',
-                }"
-              >{{ formatUsdt3(pnlSummary.ledger.total_pnl_usdt) }}</strong>
-            </span>
-            <span class="sim-total-meta small">
-              <span class="text-muted">已实现 </span>
-              <strong
-                class="mono sim-sub-pnl-val"
-                :class="{
-                  'sim-total-pnl-pos': ledgerRealizedTone === 'pos',
-                  'sim-total-pnl-neg': ledgerRealizedTone === 'neg',
-                  'sim-total-pnl-zero': ledgerRealizedTone === 'zero',
-                  'sim-total-pnl-neutral': ledgerRealizedTone === 'neutral',
-                }"
-              >{{ formatUsdt3(pnlSummary.ledger.realized_sum_usdt) }}</strong>
-              <span class="text-muted"> · </span>
-              <span class="text-muted">浮动 </span>
-              <strong
-                class="mono sim-sub-pnl-val"
-                :class="{
-                  'sim-total-pnl-pos': ledgerUnrealizedTone === 'pos',
-                  'sim-total-pnl-neg': ledgerUnrealizedTone === 'neg',
-                  'sim-total-pnl-zero': ledgerUnrealizedTone === 'zero',
-                  'sim-total-pnl-neutral': ledgerUnrealizedTone === 'neutral',
-                }"
-              >{{ formatUsdt3(pnlSummary.ledger.unrealized_sum_usdt) }}</strong>
-            </span>
-          </div>
           <div v-if="eventsLoading && eventsTotal === 0 && !eventsError" class="muted">加载记录中…</div>
           <div v-else-if="eventsError" class="aside-err">{{ eventsError }}</div>
           <div v-else-if="eventsTotal === 0" class="muted">暂无记录（首次拉取仅建立 posId 快照；仅 posId 出现/消失会写入）。</div>
