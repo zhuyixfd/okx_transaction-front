@@ -766,9 +766,9 @@ const formatUplUsdt = (raw: string | null | undefined): string =>
 const uplCellClass = (raw: string | null | undefined): string =>
   roiClassFromTone(toneFromNumber(parsePnlString(raw)))
 
-/** 平仓时间：仅 event_type=close 的行展示（写入时间即平仓落库时间）；开仓行、未平仓不展示 */
+/** 平仓时间：仅平仓事件行展示写入时间；开仓行或未平仓显示 — */
 const eventCloseTimeForCell = (e: PositionEventRow): string => {
-  if (e.event_type !== 'close') return ''
+  if (e.event_type !== 'close') return '—'
   return formatTime(e.created_at)
 }
 
