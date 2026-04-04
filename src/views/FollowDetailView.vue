@@ -17,17 +17,18 @@ type FollowRow = {
   bet_amount_per_position?: number | string | null
   max_follow_positions?: number | null
   bet_mode?: string
-  margin_ratio_threshold_pct?: number | string | null
   margin_add_ratio_of_bet?: number | string | null
   margin_auto_enabled?: boolean
+  margin_add_max_times?: number | null
 }
 
 type FollowCfgForm = {
   bet_amount_per_position: number | null
   max_follow_positions: number | null
-  margin_ratio_threshold_pct: number
   margin_add_ratio_of_bet: number
   margin_auto_enabled: boolean
+  /** 保证金自动追加次数上限；null 表示不限制 */
+  margin_add_max_times: number | null
 }
 
 type PositionEventRow = {
@@ -135,9 +136,9 @@ const simUnrealizedSum = ref('')
 const followCfg = ref<FollowCfgForm>({
   bet_amount_per_position: null,
   max_follow_positions: null,
-  margin_ratio_threshold_pct: 200,
   margin_add_ratio_of_bet: 0.2,
   margin_auto_enabled: false,
+  margin_add_max_times: null,
 })
 const configSaving = ref(false)
 const configMsg = ref('')
@@ -146,7 +147,7 @@ const enabledToggleMsg = ref('')
 
 /** 悬停「跟单配置」标题时展示（不含已固定的按成本模式文案） */
 const followConfigSectionHint =
-  '自动加保证金需在服务器环境配置 OKX API（OKX_API_KEY / OKX_SECRET_KEY / OKX_PASSPHRASE），并在下方填写「每个仓位下注金额」且勾选启用；后台将监控本人永续持仓保证金率，当 ≤ 阈值时按「下注金额 × 追加比例」追加逐仓保证金（多帐户启用时取保守的最小值组合）。'
+  '自动加保证金需在服务器环境配置 OKX API（OKX_API_KEY / OKX_SECRET_KEY / OKX_PASSPHRASE），并在下方填写「每个仓位下注金额」且勾选启用；后台将监控本人永续持仓保证金率，当 ≤ 内置阈值（200%）时按「下注金额 × 追加比例」追加逐仓保证金（多帐户启用时取下注金额与追加比例的保守最小值）。'
 
 /** 悬停「最多同时跟几个仓位（n）」时展示 */
 const maxFollowPositionsLabelHint =
@@ -546,9 +547,9 @@ const syncFollowCfgFromCurrent = () => {
   followCfg.value = {
     bet_amount_per_position: parseNum(c.bet_amount_per_position),
     max_follow_positions: parseNum(c.max_follow_positions),
-    margin_ratio_threshold_pct: parseNum(c.margin_ratio_threshold_pct) ?? 200,
     margin_add_ratio_of_bet: parseNum(c.margin_add_ratio_of_bet) ?? 0.2,
     margin_auto_enabled: Boolean(c.margin_auto_enabled),
+    margin_add_max_times: parseNum(c.margin_add_max_times),
   }
 }
 
@@ -566,6 +567,16 @@ watch(
   { immediate: true },
 )
 
+const onMarginAddMaxTimesInput = (ev: Event) => {
+  const raw = (ev.target as HTMLInputElement).value.trim()
+  if (raw === '') {
+    followCfg.value.margin_add_max_times = null
+    return
+  }
+  const n = parseInt(raw, 10)
+  followCfg.value.margin_add_max_times = Number.isFinite(n) && n > 0 ? n : null
+}
+
 const saveFollowConfig = async () => {
   const c = current.value
   if (!c) return
@@ -579,9 +590,9 @@ const saveFollowConfig = async () => {
         bet_amount_per_position: followCfg.value.bet_amount_per_position,
         max_follow_positions: followCfg.value.max_follow_positions,
         bet_mode: 'cost',
-        margin_ratio_threshold_pct: followCfg.value.margin_ratio_threshold_pct,
         margin_add_ratio_of_bet: followCfg.value.margin_add_ratio_of_bet,
         margin_auto_enabled: followCfg.value.margin_auto_enabled,
+        margin_add_max_times: followCfg.value.margin_add_max_times,
       }),
     })
     const data = (await res.json().catch(() => ({}))) as { detail?: string }
@@ -994,7 +1005,7 @@ const eventPnlTone = (e: PositionEventRow): PnlTone => {
                     <th>杠杆</th>
                     <th>本金</th>
                     <th>开仓均价</th>
-                    <th>标记/平仓价</th>
+                    <th>标记价格</th>
                     <th>盈亏（USDT）</th>
                     <th>开仓时间</th>
                     <th>平仓时间</th>
@@ -1239,17 +1250,6 @@ const eventPnlTone = (e: PositionEventRow): PnlTone => {
                     />
                   </div>
                   <div class="mb-2">
-                    <label class="form-label mb-1" for="fc-thr">保证金率阈值（%）</label>
-                    <input
-                      id="fc-thr"
-                      v-model.number="followCfg.margin_ratio_threshold_pct"
-                      type="number"
-                      min="0"
-                      step="any"
-                      class="form-control form-control-sm"
-                    />
-                  </div>
-                  <div class="mb-2">
                     <label class="form-label mb-1" for="fc-add">追加比例（相对下注金额）</label>
                     <input
                       id="fc-add"
@@ -1260,6 +1260,20 @@ const eventPnlTone = (e: PositionEventRow): PnlTone => {
                       step="0.01"
                       class="form-control form-control-sm"
                       placeholder="例如 0.2 表示追加「下注金额 × 20%」"
+                    />
+                  </div>
+                  <div class="mb-2">
+                    <label class="form-label mb-1" for="fc-margin-max-times">保证金自动追加次数上限</label>
+                    <input
+                      id="fc-margin-max-times"
+                      type="number"
+                      min="1"
+                      max="100000"
+                      step="1"
+                      class="form-control form-control-sm"
+                      placeholder="留空表示不限制"
+                      :value="followCfg.margin_add_max_times ?? ''"
+                      @input="onMarginAddMaxTimesInput"
                     />
                   </div>
                   <div class="form-check mb-3">
