@@ -17,8 +17,13 @@ type OkxEnvelope = { code?: string; msg?: string; data?: unknown }
 
 const contractSymbol = ref('')
 const contractSz = ref('')
-const contractPosSide = ref<'long' | 'short'>('long')
+/** 做多 / 做空意图 */
+const contractDirection = ref<'long' | 'short'>('long')
+/** net=单向(买卖模式) 多数账户；hedge=双向(开平仓) 才用 long/short 作 posSide */
+const contractPositionMode = ref<'net' | 'hedge'>('net')
 const contractTdMode = ref<'isolated' | 'cross'>('isolated')
+/** 杠杆倍数；留空则不调 OKX set-leverage，沿用当前合约杠杆 */
+const contractLever = ref('')
 const contractSubmitting = ref(false)
 const contractMsg = ref('')
 
@@ -103,15 +108,20 @@ const submitContract = async () => {
   contractMsg.value = ''
   contractSubmitting.value = true
   try {
+    const payload: Record<string, string> = {
+      symbol: contractSymbol.value.trim(),
+      sz: contractSz.value.trim(),
+      direction: contractDirection.value,
+      position_mode: contractPositionMode.value,
+      td_mode: contractTdMode.value,
+    }
+    const lv = contractLever.value.trim()
+    if (lv) payload.lever = lv
+
     const res = await fetch(`${API_BASE}/manual-okx/contract-order`, {
       method: 'POST',
       headers: authHeaders(),
-      body: JSON.stringify({
-        symbol: contractSymbol.value.trim(),
-        sz: contractSz.value.trim(),
-        pos_side: contractPosSide.value,
-        td_mode: contractTdMode.value,
-      }),
+      body: JSON.stringify(payload),
     })
     const body = await res.json().catch(() => ({}))
     if (!res.ok) {
@@ -188,12 +198,33 @@ onMounted(() => {
           <span class="lab">数量（U 本位永续一般为张）</span>
           <input v-model="contractSz" class="inp" placeholder="sz" autocomplete="off" />
         </label>
+        <label class="field">
+          <span class="lab">杠杆倍数</span>
+          <input
+            v-model="contractLever"
+            class="inp"
+            type="number"
+            min="1"
+            max="125"
+            step="1"
+            placeholder="留空则不修改；填写则先 set-leverage 再下单"
+            autocomplete="off"
+          />
+        </label>
         <div class="field">
           <span class="lab">方向</span>
           <div class="radios">
-            <label><input v-model="contractPosSide" type="radio" value="long" /> 做多</label>
-            <label><input v-model="contractPosSide" type="radio" value="short" /> 做空</label>
+            <label><input v-model="contractDirection" type="radio" value="long" /> 做多</label>
+            <label><input v-model="contractDirection" type="radio" value="short" /> 做空</label>
           </div>
+        </div>
+        <div class="field">
+          <span class="lab">持仓模式（须与欧易账户一致）</span>
+          <div class="radios">
+            <label><input v-model="contractPositionMode" type="radio" value="net" /> 单向 net（常见）</label>
+            <label><input v-model="contractPositionMode" type="radio" value="hedge" /> 双向 long/short</label>
+          </div>
+          <p class="field-hint">报 Parameter posSide error 时选「单向 net」。</p>
         </div>
         <label class="field">
           <span class="lab">保证金模式</span>
@@ -491,5 +522,12 @@ onMounted(() => {
 
 .hint {
   margin-bottom: 8px;
+}
+
+.field-hint {
+  margin: 0;
+  font-size: 12px;
+  opacity: 0.75;
+  line-height: 1.4;
 }
 </style>
