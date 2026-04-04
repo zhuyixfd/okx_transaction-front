@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
-import { useRouter } from 'vue-router'
+import { RouterLink, useRouter } from 'vue-router'
 
 const router = useRouter()
 
@@ -241,6 +241,7 @@ const deleteAccount = async (row: FollowRow) => {
 <template>
   <div class="page">
     <div class="header">
+      <RouterLink class="nav-extra" to="/contract-trade">合约交易 / 保证金</RouterLink>
       <h1 class="title">跟单帐户</h1>
       <p class="desc">粘贴跟单落地页链接（每行一个），保存后会解析昵称与 uniqueName。列表按「启用优先 → 最近一次启用时间」排序。</p>
     </div>
@@ -363,6 +364,21 @@ const deleteAccount = async (row: FollowRow) => {
 
 .header {
   margin-bottom: 16px;
+}
+
+.nav-extra {
+  display: inline-block;
+  margin-bottom: 10px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--color-text);
+  text-decoration: none;
+  opacity: 0.88;
+}
+
+.nav-extra:hover {
+  opacity: 1;
+  text-decoration: underline;
 }
 
 .title {

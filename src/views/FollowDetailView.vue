@@ -147,7 +147,7 @@ const enabledToggleMsg = ref('')
 
 /** 悬停「跟单配置」标题时展示（不含已固定的按成本模式文案） */
 const followConfigSectionHint =
-  '自动加保证金需在服务器环境配置 OKX API（OKX_API_KEY / OKX_SECRET_KEY / OKX_PASSPHRASE），并在下方填写「每个仓位下注金额」且勾选启用；后台将监控本人永续持仓保证金率，当 ≤ 内置阈值（200%）时按「下注金额 × 追加比例」追加逐仓保证金（多帐户启用时取下注金额与追加比例的保守最小值）。'
+  '自动加保证金需在服务器环境配置 OKX API（OKX_FOLLOW_API_KEY / OKX_FOLLOW_SECRET_KEY / OKX_FOLLOW_PASSPHRASE），并在下方填写「每个仓位下注金额」且勾选启用；后台将监控本人永续持仓保证金率，当 ≤ 内置阈值（200%）时按「下注金额 × 追加比例」追加逐仓保证金（多帐户启用时取下注金额与追加比例的保守最小值）。'
 
 /** 悬停「最多同时跟几个仓位（n）」时展示 */
 const maxFollowPositionsLabelHint =

@@ -24,6 +24,11 @@ const router = createRouter({
       component: () => import('../views/FollowDetailView.vue'),
       props: true,
     },
+    {
+      path: '/contract-trade',
+      name: 'contractTrade',
+      component: () => import('../views/ContractTradeView.vue'),
+    },
   ],
 })
 
