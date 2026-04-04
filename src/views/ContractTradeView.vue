@@ -16,7 +16,7 @@ const authHeaders = (): HeadersInit => {
 type OkxEnvelope = { code?: string; msg?: string; data?: unknown }
 
 const contractSymbol = ref('')
-/** 开仓本金 USDT（后端按标记价换算张数） */
+/** 开仓保证金 USDT；名义 = 本金 × 杠杆，后端再换张数 */
 const contractPrincipalUsdt = ref('')
 /** 做多 / 做空意图 */
 const contractDirection = ref<'long' | 'short'>('long')
@@ -198,18 +198,18 @@ onMounted(() => {
           <p class="field-hint mb-0">只填币种简称即可；若已含「-」则按原样提交（如完整 instId）。</p>
         </label>
         <label class="field">
-          <span class="lab">本金（USDT）</span>
+          <span class="lab">保证金（USDT）</span>
           <input
             v-model="contractPrincipalUsdt"
             class="inp"
             type="number"
             min="0"
             step="any"
-            placeholder="计划开仓名义本金"
+            placeholder="保证金 USDT（× 杠杆 = 名义）"
             autocomplete="off"
           />
           <p class="field-hint mb-0">
-            仅支持 U 本位 linear 永续；按标记价与合约面值换算张数并向下取整到 lotSz，实际成交随市价波动。
+            名义仓位 ≈ 保证金 × 杠杆；再按标记价与 ctVal 换张数并向下取整到 lotSz，实际成交随市价波动。
           </p>
         </label>
         <label class="field">
@@ -221,7 +221,7 @@ onMounted(() => {
             min="1"
             max="125"
             step="1"
-            placeholder="留空则不修改；填写则先 set-leverage 再下单"
+            placeholder="留空用当前合约杠杆；填写则先 set-leverage 再下单"
             autocomplete="off"
           />
         </label>
