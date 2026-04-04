@@ -16,12 +16,12 @@ const authHeaders = (): HeadersInit => {
 type OkxEnvelope = { code?: string; msg?: string; data?: unknown }
 
 const contractSymbol = ref('')
-/** 开仓保证金 USDT；名义 = 本金 × 杠杆，后端再换张数 */
+/** 开仓保证金 USDT */
 const contractPrincipalUsdt = ref('')
 /** 做多 / 做空意图 */
 const contractDirection = ref<'long' | 'short'>('long')
 const contractTdMode = ref<'isolated' | 'cross'>('isolated')
-/** 杠杆倍数；留空则不调 OKX set-leverage，沿用当前合约杠杆 */
+/** 杠杆倍数 */
 const contractLever = ref('')
 const contractSubmitting = ref(false)
 const contractMsg = ref('')
@@ -205,12 +205,9 @@ onMounted(() => {
             type="number"
             min="0"
             step="any"
-            placeholder="保证金 USDT（× 杠杆 = 名义）"
+            placeholder=""
             autocomplete="off"
           />
-          <p class="field-hint mb-0">
-            名义仓位 ≈ 保证金 × 杠杆；再按标记价与 ctVal 换张数并向下取整到 lotSz，实际成交随市价波动。
-          </p>
         </label>
         <label class="field">
           <span class="lab">杠杆倍数</span>
