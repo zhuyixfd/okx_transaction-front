@@ -43,6 +43,8 @@ type PositionEventRow = {
   last_px: string | null
   /** 来自接口 uplRatio，经 detail_json / 快照落库后返回 */
   upl_ratio?: string | null
+  /** 来自接口 upl（USDT），未平仓行前端用快照覆盖 */
+  upl?: string | null
   c_time: string | null
   detail_json: string | null
   created_at: string
@@ -59,6 +61,8 @@ type PositionSnapshotRow = {
   last_px: string | null
   /** 欧易 uplRatio，写入 follow_position_snapshots.snapshot_json */
   upl_ratio?: string | null
+  /** 欧易 upl，未实现盈亏（USDT） */
+  upl?: string | null
 }
 
 type PositionSnapshotPayload = {
@@ -746,6 +750,22 @@ const eventMarkPx = (e: PositionEventRow) => {
   return e.last_px ?? '—'
 }
 
+/** 盈亏 USDT：未平仓用快照实时 upl；已平仓用事件 detail 入库值 */
+const eventUplRaw = (e: PositionEventRow): string | null => {
+  if (!positionClosedForEvent(e) && e.pos_id) {
+    const live = snapshotByPosId.value.get(e.pos_id)?.upl
+    if (live != null && String(live).trim() !== '') return String(live).trim()
+  }
+  if (e.upl != null && String(e.upl).trim() !== '') return String(e.upl).trim()
+  return null
+}
+
+const formatUplUsdt = (raw: string | null | undefined): string =>
+  raw == null || String(raw).trim() === '' ? '—' : formatUsdt3(raw)
+
+const uplCellClass = (raw: string | null | undefined): string =>
+  roiClassFromTone(toneFromNumber(parsePnlString(raw)))
+
 /**
  * 已平仓：更新时间为该行记录时间（不随轮询变）；未平仓且仍在快照中：为快照刷新时间。
  */
@@ -875,6 +895,7 @@ const eventPnlTone = (e: PositionEventRow): PnlTone => {
                     <th>开仓均价</th>
                     <th>标记价</th>
                     <th>收益率</th>
+                    <th>盈亏（USDT）</th>
                     <th>开仓时间</th>
                     <th>更新时间</th>
                   </tr>
@@ -895,6 +916,7 @@ const eventPnlTone = (e: PositionEventRow): PnlTone => {
                     <td class="mono sm">{{ formatAvgPx(row.p.avg_px) }}</td>
                     <td class="mono sm mark-col">{{ row.p.last_px ?? '—' }}</td>
                     <td :class="roiClassFromTone(row.tone)">{{ snapshotRoiDisplay(row.p) }}</td>
+                    <td :class="uplCellClass(row.p.upl)">{{ formatUplUsdt(row.p.upl) }}</td>
                     <td class="nowrap sm">{{ row.p.c_time_format ?? '—' }}</td>
                     <td class="nowrap sm">{{ formatTime(snapshot.refreshed_at) }}</td>
                   </tr>
@@ -1052,6 +1074,7 @@ const eventPnlTone = (e: PositionEventRow): PnlTone => {
                     <th>开仓均价</th>
                     <th>标记价</th>
                     <th>收益率</th>
+                    <th>盈亏（USDT）</th>
                     <th>更新/平仓时间</th>
                   </tr>
                 </thead>
@@ -1078,6 +1101,7 @@ const eventPnlTone = (e: PositionEventRow): PnlTone => {
                       :class="{ 'mark-col': !positionClosedForEvent(e) }"
                     >{{ eventMarkPx(e) }}</td>
                     <td :class="roiClassFromTone(eventPnlTone(e))">{{ eventRoiDisplay(e) }}</td>
+                    <td :class="uplCellClass(eventUplRaw(e))">{{ formatUplUsdt(eventUplRaw(e)) }}</td>
                     <td class="nowrap sm">{{ formatTime(eventHistoryUpdateTime(e)) }}</td>
                   </tr>
                 </tbody>
