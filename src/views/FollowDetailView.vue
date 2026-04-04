@@ -88,6 +88,11 @@ type FollowSimRecordRow = {
   opened_at: string
   closed_at: string | null
   updated_at: string
+  /** 以下字段预留，接口未返回时为空 */
+  position_notional_usdt?: string | null
+  margin_usdt?: string | null
+  maint_margin_ratio?: string | null
+  est_liquidation_px?: string | null
 }
 
 const props = defineProps<{
@@ -784,6 +789,12 @@ const simPxLabel = (r: FollowSimRecordRow) =>
 const simPnlTone = (r: FollowSimRecordRow): PnlTone =>
   toneFromNumber(parsePnlString(simPnlDisplay(r)))
 
+/** 跟单记录扩展列：无数据时显示空字符串 */
+const simRecordExtraText = (raw: string | null | undefined): string => {
+  if (raw == null || String(raw).trim() === '') return ''
+  return String(raw).trim()
+}
+
 /** 按币种字母序 a→z，不区分大小写；无币种排最后；同币种再按 posId 稳定排序 */
 const comparePosCcy = (a: string | null | undefined, b: string | null | undefined): number => {
   const ca = (a ?? '').trim().toLowerCase()
@@ -987,6 +998,10 @@ const eventPnlTone = (e: PositionEventRow): PnlTone => {
                     <th>盈亏（USDT）</th>
                     <th>开仓时间</th>
                     <th>平仓时间</th>
+                    <th>持仓量（USDT）</th>
+                    <th>保证金（USDT）</th>
+                    <th>维持保证金率</th>
+                    <th>预估强平价格</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -1011,6 +1026,10 @@ const eventPnlTone = (e: PositionEventRow): PnlTone => {
                     <td class="mono sm">{{ formatUsdt3(simPnlDisplay(r)) }}</td>
                     <td class="nowrap sm">{{ formatTime(r.opened_at) }}</td>
                     <td class="nowrap sm">{{ formatTime(r.closed_at) }}</td>
+                    <td class="mono sm">{{ simRecordExtraText(r.position_notional_usdt) }}</td>
+                    <td class="mono sm">{{ simRecordExtraText(r.margin_usdt) }}</td>
+                    <td class="mono sm">{{ simRecordExtraText(r.maint_margin_ratio) }}</td>
+                    <td class="mono sm">{{ simRecordExtraText(r.est_liquidation_px) }}</td>
                   </tr>
                 </tbody>
               </table>
@@ -1066,12 +1085,12 @@ const eventPnlTone = (e: PositionEventRow): PnlTone => {
                     <th>币种</th>
                     <th>方向</th>
                     <th>杠杆</th>
-                    <th>获取/开仓时间</th>
-                    <th>开仓均价</th>
-                    <th>标记价</th>
                     <th>收益率</th>
                     <th>盈亏（USDT）</th>
+                    <th>获取/开仓时间</th>
+                    <th>开仓均价</th>
                     <th>平仓时间</th>
+                    <th>标记价/平仓均价</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -1090,15 +1109,15 @@ const eventPnlTone = (e: PositionEventRow): PnlTone => {
                     <td>{{ e.pos_ccy ?? '—' }}</td>
                     <td>{{ formatPosSide(e.pos_side) }}</td>
                     <td>{{ formatLever(e.lever) }}</td>
+                    <td :class="roiClassFromTone(eventPnlTone(e))">{{ eventRoiDisplay(e) }}</td>
+                    <td :class="uplCellClass(eventUplRaw(e))">{{ formatUplUsdt(eventUplRaw(e)) }}</td>
                     <td class="nowrap">{{ formatTime(e.created_at) }}</td>
                     <td class="mono sm">{{ formatAvgPx(e.avg_px) }}</td>
+                    <td class="nowrap sm">{{ eventCloseTimeForCell(e) }}</td>
                     <td
                       class="mono sm"
                       :class="{ 'mark-col': !positionClosedForEvent(e) }"
                     >{{ eventMarkPx(e) }}</td>
-                    <td :class="roiClassFromTone(eventPnlTone(e))">{{ eventRoiDisplay(e) }}</td>
-                    <td :class="uplCellClass(eventUplRaw(e))">{{ formatUplUsdt(eventUplRaw(e)) }}</td>
-                    <td class="nowrap sm">{{ eventCloseTimeForCell(e) }}</td>
                   </tr>
                 </tbody>
               </table>
