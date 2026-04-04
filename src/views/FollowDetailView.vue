@@ -698,6 +698,36 @@ const formatPosSide = (raw: string | null | undefined): string => {
   return String(raw).trim()
 }
 
+/** 杠杆：空串与 null 统一显示为 —（仅 ?? 无法覆盖 ""） */
+const formatLever = (raw: string | null | undefined): string => {
+  if (raw == null) return '—'
+  const s = String(raw).trim()
+  return s === '' ? '—' : s
+}
+
+/** 跟单记录：未平仓从快照取杠杆；已平仓尝试从当前页开仓事件补全 */
+const simLeverFromEvents = (posId: string): string | null => {
+  for (const e of events.value) {
+    if (
+      e.pos_id === posId &&
+      e.event_type === 'open' &&
+      e.lever != null &&
+      String(e.lever).trim() !== ''
+    ) {
+      return String(e.lever).trim()
+    }
+  }
+  return null
+}
+
+const simLeverDisplay = (r: FollowSimRecordRow): string => {
+  const snap = snapshotByPosId.value.get(r.pos_id)?.lever
+  if (snap != null && String(snap).trim() !== '') return String(snap).trim()
+  const fromEv = simLeverFromEvents(r.pos_id)
+  if (fromEv) return fromEv
+  return '—'
+}
+
 const listItems = computed(() =>
   accounts.value.filter((a) => a.unique_name != null && String(a.unique_name).length > 0),
 )
@@ -884,7 +914,7 @@ const eventPnlTone = (e: PositionEventRow): PnlTone => {
                     </td>
                     <td>{{ row.p.pos_ccy ?? '—' }}</td>
                     <td>{{ formatPosSide(row.p.pos_side) }}</td>
-                    <td>{{ row.p.lever ?? '—' }}</td>
+                    <td>{{ formatLever(row.p.lever) }}</td>
                     <td class="mono sm">{{ formatAvgPx(row.p.avg_px) }}</td>
                     <td class="mono sm mark-col">{{ row.p.last_px ?? '—' }}</td>
                     <td class="nowrap sm">{{ row.p.c_time_format ?? '—' }}</td>
@@ -978,7 +1008,7 @@ const eventPnlTone = (e: PositionEventRow): PnlTone => {
                     </td>
                     <td>{{ r.pos_ccy ?? '—' }}</td>
                     <td>{{ formatPosSide(r.pos_side) }}</td>
-                    <td>—</td>
+                    <td>{{ simLeverDisplay(r) }}</td>
                     <td class="mono sm">{{ formatUsdt3(r.stake_usdt) }}</td>
                     <td class="mono sm">{{ formatAvgPx(r.entry_avg_px) }}</td>
                     <td class="mono sm">{{ simPxLabel(r) }}</td>
@@ -1097,7 +1127,7 @@ const eventPnlTone = (e: PositionEventRow): PnlTone => {
                     </td>
                     <td>{{ e.pos_ccy ?? '—' }}</td>
                     <td>{{ formatPosSide(e.pos_side) }}</td>
-                    <td>{{ e.lever ?? '—' }}</td>
+                    <td>{{ formatLever(e.lever) }}</td>
                     <td class="nowrap">{{ formatTime(e.created_at) }}</td>
                     <td class="mono sm">{{ formatAvgPx(e.avg_px) }}</td>
                     <td
