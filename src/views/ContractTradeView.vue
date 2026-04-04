@@ -56,6 +56,10 @@ const pickStr = (row: Record<string, unknown>, keys: string[]) => {
   return '—'
 }
 
+/** number 型 v-model（type=number）无 trim，统一成字符串再处理 */
+const trimStr = (v: unknown): string =>
+  v === null || v === undefined ? '' : String(v).trim()
+
 const loadFills = async () => {
   fillsLoading.value = true
   fillsError.value = ''
@@ -115,7 +119,7 @@ const submitContract = async () => {
       position_mode: contractPositionMode.value,
       td_mode: contractTdMode.value,
     }
-    const lv = contractLever.value.trim()
+    const lv = trimStr(contractLever.value)
     if (lv) payload.lever = lv
 
     const res = await fetch(`${API_BASE}/manual-okx/contract-order`, {
