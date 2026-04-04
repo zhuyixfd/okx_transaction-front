@@ -27,7 +27,7 @@ const contractSubmitting = ref(false)
 const contractMsg = ref('')
 
 const marginInstId = ref('')
-const marginPosSide = ref<'long' | 'short' | 'net'>('long')
+const marginPosSide = ref<'long' | 'short'>('long')
 const marginAmt = ref('')
 const marginSubmitting = ref(false)
 const marginMsg = ref('')
@@ -195,7 +195,7 @@ onMounted(() => {
             placeholder="如 DOGE（自动为 DOGE-USDT-SWAP）"
             autocomplete="off"
           />
-          <p class="field-hint mb-0">只填币种简称即可；若已含「-」则按原样提交（如完整 instId）。</p>
+          <p class="field-hint mb-0">可填 DOGE 或 DOGE-USDT；后端会规范为 DOGE-USDT-SWAP。已是完整永续 instId 的保持原样。</p>
         </label>
         <label class="field">
           <span class="lab">保证金（USDT）</span>
@@ -265,7 +265,6 @@ onMounted(() => {
           <div class="radios">
             <label><input v-model="marginPosSide" type="radio" value="long" /> 多 long</label>
             <label><input v-model="marginPosSide" type="radio" value="short" /> 空 short</label>
-            <label><input v-model="marginPosSide" type="radio" value="net" /> net</label>
           </div>
         </div>
         <label class="field">
