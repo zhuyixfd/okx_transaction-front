@@ -780,16 +780,41 @@ const simPxLabel = (r: FollowSimRecordRow) =>
 const simPnlTone = (r: FollowSimRecordRow): PnlTone =>
   toneFromNumber(parsePnlString(simPnlDisplay(r)))
 
+/** 按币种字母序 a→z，不区分大小写；无币种排最后；同币种再按 posId 稳定排序 */
+const comparePosCcy = (a: string | null | undefined, b: string | null | undefined): number => {
+  const ca = (a ?? '').trim().toLowerCase()
+  const cb = (b ?? '').trim().toLowerCase()
+  if (ca === '' && cb === '') return 0
+  if (ca === '') return 1
+  if (cb === '') return -1
+  return ca.localeCompare(cb, 'en', { sensitivity: 'base' })
+}
+
 /** 当前持仓行装饰（避免模板内重复计算 tone） */
 const snapshotRowsDecorated = computed(() =>
-  (snapshot.value?.positions ?? []).map((p) => {
-    const tone = pnlToneFromAvgMark(p.avg_px, p.last_px, p.pos_side)
-    return {
-      p,
-      tone,
-      rowClass: rowClassFromPnlTone(tone),
-      badgeClass: badgeClassFromPnlTone(tone),
-    }
+  [...(snapshot.value?.positions ?? [])]
+    .sort((a, b) => {
+      const c = comparePosCcy(a.pos_ccy, b.pos_ccy)
+      if (c !== 0) return c
+      return String(a.pos_id).localeCompare(String(b.pos_id), 'en', { sensitivity: 'base' })
+    })
+    .map((p) => {
+      const tone = pnlToneFromAvgMark(p.avg_px, p.last_px, p.pos_side)
+      return {
+        p,
+        tone,
+        rowClass: rowClassFromPnlTone(tone),
+        badgeClass: badgeClassFromPnlTone(tone),
+      }
+    }),
+)
+
+/** 跟单记录：当前页内按币种排序（与持仓一致） */
+const simRecordsSorted = computed(() =>
+  [...simRecords.value].sort((a, b) => {
+    const c = comparePosCcy(a.pos_ccy, b.pos_ccy)
+    if (c !== 0) return c
+    return String(a.pos_id).localeCompare(String(b.pos_id), 'en', { sensitivity: 'base' })
   }),
 )
 
@@ -995,7 +1020,7 @@ const eventPnlTone = (e: PositionEventRow): PnlTone => {
                 </thead>
                 <tbody>
                   <tr
-                    v-for="r in simRecords"
+                    v-for="r in simRecordsSorted"
                     :key="r.id"
                     :class="rowClassFromPnlTone(simPnlTone(r))"
                   >
