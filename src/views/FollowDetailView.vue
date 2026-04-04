@@ -41,6 +41,8 @@ type PositionEventRow = {
   lever: string | null
   avg_px: string | null
   last_px: string | null
+  /** 来自接口 uplRatio，经 detail_json / 快照落库后返回 */
+  upl_ratio?: string | null
   c_time: string | null
   detail_json: string | null
   created_at: string
@@ -55,6 +57,8 @@ type PositionSnapshotRow = {
   lever: string | null
   avg_px: string | null
   last_px: string | null
+  /** 欧易 uplRatio，写入 follow_position_snapshots.snapshot_json */
+  upl_ratio?: string | null
 }
 
 type PositionSnapshotPayload = {
@@ -478,6 +482,26 @@ const formatRoiPct = (
   const pct = rel * 100
   const sign = pct > 0 ? '+' : ''
   return `${sign}${pct.toFixed(2)}%`
+}
+
+/** 展示接口返回的 uplRatio（已含 % 则原样，否则末尾补 %） */
+const formatApiUplRatio = (raw: string | null | undefined): string | null => {
+  if (raw == null || String(raw).trim() === '') return null
+  const s = String(raw).trim()
+  if (/%/.test(s)) return s
+  return `${s}%`
+}
+
+const snapshotRoiDisplay = (p: PositionSnapshotRow): string => {
+  const api = formatApiUplRatio(p.upl_ratio)
+  if (api) return api
+  return formatRoiPct(p.avg_px, p.last_px, p.pos_side)
+}
+
+const eventRoiDisplay = (e: PositionEventRow): string => {
+  const api = formatApiUplRatio(e.upl_ratio)
+  if (api) return api
+  return formatRoiPct(e.avg_px, eventMarkPx(e), e.pos_side)
 }
 
 const roiClassFromTone = (t: PnlTone): string => {
@@ -972,7 +996,7 @@ const eventPnlTone = (e: PositionEventRow): PnlTone => {
                     <td>{{ formatLever(row.p.lever) }}</td>
                     <td class="mono sm">{{ formatAvgPx(row.p.avg_px) }}</td>
                     <td class="mono sm mark-col">{{ row.p.last_px ?? '—' }}</td>
-                    <td :class="roiClassFromTone(row.tone)">{{ formatRoiPct(row.p.avg_px, row.p.last_px, row.p.pos_side) }}</td>
+                    <td :class="roiClassFromTone(row.tone)">{{ snapshotRoiDisplay(row.p) }}</td>
                     <td class="nowrap sm">{{ row.p.c_time_format ?? '—' }}</td>
                     <td class="nowrap sm">{{ formatTime(snapshot.refreshed_at) }}</td>
                   </tr>
@@ -1191,7 +1215,7 @@ const eventPnlTone = (e: PositionEventRow): PnlTone => {
                       class="mono sm"
                       :class="{ 'mark-col': !positionClosedForEvent(e) }"
                     >{{ eventMarkPx(e) }}</td>
-                    <td :class="roiClassFromTone(eventPnlTone(e))">{{ formatRoiPct(e.avg_px, eventMarkPx(e), e.pos_side) }}</td>
+                    <td :class="roiClassFromTone(eventPnlTone(e))">{{ eventRoiDisplay(e) }}</td>
                     <td class="nowrap sm">{{ formatTime(eventHistoryUpdateTime(e)) }}</td>
                   </tr>
                 </tbody>
