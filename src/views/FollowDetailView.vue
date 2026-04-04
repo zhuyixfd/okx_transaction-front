@@ -955,7 +955,7 @@ const eventPnlTone = (e: PositionEventRow): PnlTone => {
                     <th>币种</th>
                     <th>方向</th>
                     <th>杠杆</th>
-                    <th>模拟本金</th>
+                    <th>本金</th>
                     <th>开仓均价</th>
                     <th>标记/平仓价</th>
                     <th>盈亏（USDT）</th>
