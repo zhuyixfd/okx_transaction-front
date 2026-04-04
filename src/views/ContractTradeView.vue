@@ -16,11 +16,10 @@ const authHeaders = (): HeadersInit => {
 type OkxEnvelope = { code?: string; msg?: string; data?: unknown }
 
 const contractSymbol = ref('')
-const contractSz = ref('')
+/** 开仓本金 USDT（后端按标记价换算张数） */
+const contractPrincipalUsdt = ref('')
 /** 做多 / 做空意图 */
 const contractDirection = ref<'long' | 'short'>('long')
-/** net=单向(买卖模式) 多数账户；hedge=双向(开平仓) 才用 long/short 作 posSide */
-const contractPositionMode = ref<'net' | 'hedge'>('net')
 const contractTdMode = ref<'isolated' | 'cross'>('isolated')
 /** 杠杆倍数；留空则不调 OKX set-leverage，沿用当前合约杠杆 */
 const contractLever = ref('')
@@ -114,9 +113,8 @@ const submitContract = async () => {
   try {
     const payload: Record<string, string> = {
       symbol: contractSymbol.value.trim(),
-      sz: contractSz.value.trim(),
+      principal_usdt: trimStr(contractPrincipalUsdt.value),
       direction: contractDirection.value,
-      position_mode: contractPositionMode.value,
       td_mode: contractTdMode.value,
     }
     const lv = trimStr(contractLever.value)
@@ -182,7 +180,7 @@ onMounted(() => {
       <RouterLink class="back" to="/">← 跟单帐户</RouterLink>
       <h1 class="title">合约交易与保证金</h1>
       <p class="desc">
-        市价开仓与逐仓追加保证金直连 OKX；成交与保证金划转记录来自交易所接口，本系统不入库。
+        合约开仓固定为双向（long/short）；请确保欧易合约为开平仓模式。币种只填如 DOGE 即自动 USDT 永续。成交与保证金流水来自交易所，本系统不入库。
       </p>
     </div>
 
@@ -190,17 +188,29 @@ onMounted(() => {
       <div class="card-title">合约交易（市价开仓）</div>
       <div class="form-grid">
         <label class="field">
-          <span class="lab">交易币种 / 合约</span>
+          <span class="lab">交易币种</span>
           <input
             v-model="contractSymbol"
             class="inp"
-            placeholder="如 BTC 或 BTC-USDT-SWAP"
+            placeholder="如 DOGE（自动为 DOGE-USDT-SWAP）"
             autocomplete="off"
           />
+          <p class="field-hint mb-0">只填币种简称即可；若已含「-」则按原样提交（如完整 instId）。</p>
         </label>
         <label class="field">
-          <span class="lab">数量（U 本位永续一般为张）</span>
-          <input v-model="contractSz" class="inp" placeholder="sz" autocomplete="off" />
+          <span class="lab">本金（USDT）</span>
+          <input
+            v-model="contractPrincipalUsdt"
+            class="inp"
+            type="number"
+            min="0"
+            step="any"
+            placeholder="计划开仓名义本金"
+            autocomplete="off"
+          />
+          <p class="field-hint mb-0">
+            仅支持 U 本位 linear 永续；按标记价与合约面值换算张数并向下取整到 lotSz，实际成交随市价波动。
+          </p>
         </label>
         <label class="field">
           <span class="lab">杠杆倍数</span>
@@ -221,14 +231,6 @@ onMounted(() => {
             <label><input v-model="contractDirection" type="radio" value="long" /> 做多</label>
             <label><input v-model="contractDirection" type="radio" value="short" /> 做空</label>
           </div>
-        </div>
-        <div class="field">
-          <span class="lab">持仓模式（须与欧易账户一致）</span>
-          <div class="radios">
-            <label><input v-model="contractPositionMode" type="radio" value="net" /> 单向 net（常见）</label>
-            <label><input v-model="contractPositionMode" type="radio" value="hedge" /> 双向 long/short</label>
-          </div>
-          <p class="field-hint">报 Parameter posSide error 时选「单向 net」。</p>
         </div>
         <label class="field">
           <span class="lab">保证金模式</span>
@@ -253,11 +255,11 @@ onMounted(() => {
       <div class="card-title">追加逐仓保证金</div>
       <div class="form-grid">
         <label class="field">
-          <span class="lab">合约 instId</span>
+          <span class="lab">交易币种</span>
           <input
             v-model="marginInstId"
             class="inp"
-            placeholder="如 ETH-USDT-SWAP 或 ETH"
+            placeholder="如 DOGE（自动为 DOGE-USDT-SWAP）"
             autocomplete="off"
           />
         </label>
@@ -533,5 +535,10 @@ onMounted(() => {
   font-size: 12px;
   opacity: 0.75;
   line-height: 1.4;
+}
+
+.field-hint.mb-0 {
+  margin-top: 6px;
+  margin-bottom: 0;
 }
 </style>
