@@ -1315,7 +1315,7 @@ const eventPnlTone = (e: PositionEventRow): PnlTone => {
 }
 
 .detail-aside {
-  width: 280px;
+  width: 162px; /* 在 202px 基础上再窄约 20% */
   flex-shrink: 0;
   border-right: 1px solid var(--color-border);
   background: var(--color-background-soft);
@@ -1449,13 +1449,14 @@ const eventPnlTone = (e: PositionEventRow): PnlTone => {
     gap: 1.5rem;
   }
 
+  /* 中间 : 右侧 = 311 : 64（在 59:16 基础上右侧再 ×0.8，约再窄 20%） */
   .detail-main-grid.detail-two-col .detail-col-main {
-    flex: 2 1 0;
+    flex: 311 1 0;
     min-width: 0;
   }
 
   .detail-main-grid.detail-two-col .detail-col-info {
-    flex: 1 1 0;
+    flex: 64 1 0;
     min-width: 0;
   }
 }
