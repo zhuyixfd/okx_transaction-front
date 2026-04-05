@@ -191,11 +191,43 @@ const pickLinkedStr = (row: Record<string, unknown>, keys: string[]) => {
   return '—'
 }
 
+/** 与 formatTime 同为 Asia/Shanghai，并带毫秒（欧易 fillTime/ts/cTime 多为毫秒，部分为秒） */
+const formatDateTimeShanghaiMs = (d: Date): string => {
+  if (!Number.isFinite(d.getTime())) return '—'
+  const parts = new Intl.DateTimeFormat('en-GB', {
+    timeZone: 'Asia/Shanghai',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    fractionalSecondDigits: 3,
+    hour12: false,
+  }).formatToParts(d)
+  const v: Record<string, string> = {}
+  for (const p of parts) {
+    if (p.type !== 'literal') v[p.type] = p.value
+  }
+  const frac = v.fractionalSecond ?? '000'
+  return `${v.year}-${v.month}-${v.day} ${v.hour}:${v.minute}:${v.second}.${frac}`
+}
+
 const formatLinkedTs = (raw: string | number | undefined) => {
   if (raw === undefined || raw === '' || raw === '—') return '—'
-  const n = typeof raw === 'number' ? raw : Number(String(raw).trim())
-  if (!Number.isFinite(n)) return String(raw)
-  return new Date(n).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' })
+  const trimmed = typeof raw === 'number' ? String(raw) : String(raw).trim()
+  if (trimmed === '' || trimmed === '—') return '—'
+  const isoMs = Date.parse(trimmed)
+  if (Number.isFinite(isoMs)) return formatDateTimeShanghaiMs(new Date(isoMs))
+  const cleaned = trimmed.replace(/,/g, '')
+  const n = Number(cleaned)
+  if (!Number.isFinite(n)) return trimmed
+  let d: Date
+  if (n >= 1e12) d = new Date(n)
+  else if (n >= 1e9) d = new Date(n * 1000)
+  else d = new Date(n)
+  if (!Number.isFinite(d.getTime())) return trimmed
+  return formatDateTimeShanghaiMs(d)
 }
 
 /** 欧易 instId 如 BTC-USDT-SWAP → 币种 BTC（与对方 pos_ccy 列对齐） */
