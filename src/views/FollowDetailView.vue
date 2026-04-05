@@ -147,6 +147,8 @@ const simRecords = ref<FollowSimRecordRow[]>([])
 const simLoading = ref(false)
 const simError = ref('')
 const SIM_PAGE_SIZE = 20
+/** 本人 OKX：成交 / 保证金账单列表分页（每表独立） */
+const LINKED_OKX_PAGE_SIZE = 10
 const simPage = ref(1)
 const simTotal = ref(0)
 const simTotalPnl = ref('')
@@ -178,6 +180,8 @@ const linkedPosRows = ref<Record<string, unknown>[]>([])
 /** 跟单持仓（欧易 positions）最近一次成功拉取时间，用于「更新时间」列（与对方快照 refreshed_at 对齐语义） */
 const linkedOkxFetchedAt = ref<string | null>(null)
 const linkedOkxErr = ref('')
+const linkedFillsPage = ref(1)
+const linkedBillsPage = ref(1)
 
 const pickLinkedStr = (row: Record<string, unknown>, keys: string[]) => {
   for (const k of keys) {
@@ -236,10 +240,10 @@ const loadLinkedOkxTradeData = async (silent = false) => {
   const q = new URLSearchParams({ unique_name: un })
   try {
     const [fRes, bRes, pRes] = await Promise.all([
-      fetch(`${API_BASE}/follow-accounts/linked-okx/fills?${q}&instType=SWAP&limit=30`, {
+      fetch(`${API_BASE}/follow-accounts/linked-okx/fills?${q}&instType=SWAP&limit=100`, {
         headers: authHeaders(),
       }),
-      fetch(`${API_BASE}/follow-accounts/linked-okx/margin-bills?${q}&instType=SWAP&limit=50`, {
+      fetch(`${API_BASE}/follow-accounts/linked-okx/margin-bills?${q}&instType=SWAP&limit=100`, {
         headers: authHeaders(),
       }),
       fetch(`${API_BASE}/follow-accounts/linked-okx/positions?${q}&instType=SWAP`, {
@@ -289,7 +293,7 @@ const simRecordsSectionHint =
 
 /** 悬停「跟单持仓」：本人绑定 OKX 的永续持仓 */
 const followMyPositionsSectionHint =
-  '数据来自欧易私有接口 GET /api/v5/account/positions（SWAP），使用本页绑定的 API 密钥；与「对方持仓」社区接口、与下方「模拟跟单资金」表均无关。每 2 秒与本人成交、保证金流水一并刷新。'
+  '数据来自欧易私有接口 GET /api/v5/account/positions（SWAP），使用本页绑定的 API 密钥；与「对方持仓」社区接口、与「模拟跟单资金」表均无关。每 2 秒与同轮询下的页内下方「本人 OKX」成交、保证金账单一并刷新。'
 
 /** 悬停「开仓 / 平仓记录」标题 */
 const eventsSectionHint =
@@ -529,6 +533,8 @@ onUnmounted(() => {
 watch(paramUniqueName, () => {
   eventsPage.value = 1
   simPage.value = 1
+  linkedFillsPage.value = 1
+  linkedBillsPage.value = 1
   void loadEvents(false)
   void loadSnapshot(false)
   void loadSimRecords(false)
@@ -540,6 +546,42 @@ const eventsTotalPages = computed(() =>
 )
 
 const simTotalPages = computed(() => Math.max(1, Math.ceil(simTotal.value / SIM_PAGE_SIZE)))
+
+const linkedFillsTotalPages = computed(() =>
+  Math.max(1, Math.ceil(linkedFillsRows.value.length / LINKED_OKX_PAGE_SIZE)),
+)
+const linkedBillsTotalPages = computed(() =>
+  Math.max(1, Math.ceil(linkedBillsRows.value.length / LINKED_OKX_PAGE_SIZE)),
+)
+const linkedFillsPageSlice = computed(() => {
+  const start = (linkedFillsPage.value - 1) * LINKED_OKX_PAGE_SIZE
+  return linkedFillsRows.value.slice(start, start + LINKED_OKX_PAGE_SIZE)
+})
+const linkedBillsPageSlice = computed(() => {
+  const start = (linkedBillsPage.value - 1) * LINKED_OKX_PAGE_SIZE
+  return linkedBillsRows.value.slice(start, start + LINKED_OKX_PAGE_SIZE)
+})
+
+const clampLinkedOkxListPages = () => {
+  const mf = Math.max(1, Math.ceil(linkedFillsRows.value.length / LINKED_OKX_PAGE_SIZE))
+  const mb = Math.max(1, Math.ceil(linkedBillsRows.value.length / LINKED_OKX_PAGE_SIZE))
+  if (linkedFillsPage.value > mf) linkedFillsPage.value = mf
+  if (linkedBillsPage.value > mb) linkedBillsPage.value = mb
+}
+watch([linkedFillsRows, linkedBillsRows], clampLinkedOkxListPages)
+
+const goLinkedFillsPrev = () => {
+  if (linkedFillsPage.value > 1) linkedFillsPage.value -= 1
+}
+const goLinkedFillsNext = () => {
+  if (linkedFillsPage.value < linkedFillsTotalPages.value) linkedFillsPage.value += 1
+}
+const goLinkedBillsPrev = () => {
+  if (linkedBillsPage.value > 1) linkedBillsPage.value -= 1
+}
+const goLinkedBillsNext = () => {
+  if (linkedBillsPage.value < linkedBillsTotalPages.value) linkedBillsPage.value += 1
+}
 
 /** 盈亏行着色：正盈 / 负亏 / 零 / 无法判断 */
 type PnlTone = 'pos' | 'neg' | 'zero' | 'neutral'
@@ -1665,6 +1707,128 @@ const eventPnlTone = (e: PositionEventRow): PnlTone => {
             </nav>
           </template>
         </section>
+
+            <section v-if="current?.okx_api_account_id" class="linked-okx-card card-block">
+              <h2 class="mb-2 detail-panel-title">
+                <span
+                  class="btn btn-warning hint-cursor"
+                  title="成交与保证金流水来自欧易私有接口；永续持仓见上方「跟单持仓」（同一密钥、同一轮询）。每 2 秒刷新；分页基于当期各最多 100 条。"
+                >本人 OKX（绑定帐户）</span>
+              </h2>
+              <p v-if="linkedOkxErr" class="small text-danger mb-2">{{ linkedOkxErr }}</p>
+              <h3 class="h6 mb-2">我的成交</h3>
+              <div v-if="linkedFillsRows.length === 0" class="small text-muted mb-3">暂无成交</div>
+              <template v-else>
+                <div class="table-responsive mb-2">
+                  <table class="table table-sm table-bordered align-middle mb-0 linked-okx-table">
+                    <thead class="table-light">
+                      <tr>
+                        <th>时间</th>
+                        <th>合约</th>
+                        <th>方向</th>
+                        <th>持仓方向</th>
+                        <th>成交价</th>
+                        <th>数量</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr v-for="(r, i) in linkedFillsPageSlice" :key="'lf-' + linkedFillsPage + '-' + i">
+                        <td class="nowrap sm">{{ formatLinkedTs(pickLinkedStr(r, ['fillTime', 'ts'])) }}</td>
+                        <td class="mono sm">{{ pickLinkedStr(r, ['instId']) }}</td>
+                        <td>{{ pickLinkedStr(r, ['side']) }}</td>
+                        <td>{{ pickLinkedStr(r, ['posSide']) }}</td>
+                        <td class="mono sm">{{ pickLinkedStr(r, ['fillPx', 'px']) }}</td>
+                        <td class="mono sm">{{ pickLinkedStr(r, ['fillSz', 'sz']) }}</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+                <nav
+                  class="mb-3 d-flex justify-content-center flex-wrap align-items-center gap-2"
+                  aria-label="本人成交分页"
+                >
+                  <button
+                    type="button"
+                    class="btn btn-sm btn-primary"
+                    :disabled="linkedFillsPage <= 1"
+                    @click="goLinkedFillsPrev"
+                  >
+                    上一页
+                  </button>
+                  <span class="text-nowrap small text-muted">
+                    第 {{ linkedFillsPage }} / {{ linkedFillsTotalPages }} 页，共 {{ linkedFillsRows.length }} 条（每页
+                    {{ LINKED_OKX_PAGE_SIZE }} 条）
+                  </span>
+                  <button
+                    type="button"
+                    class="btn btn-sm btn-primary"
+                    :disabled="linkedFillsPage >= linkedFillsTotalPages"
+                    @click="goLinkedFillsNext"
+                  >
+                    下一页
+                  </button>
+                </nav>
+              </template>
+              <h3 class="h6 mb-2">保证金划转（账单 type=6）</h3>
+              <div v-if="linkedBillsRows.length === 0" class="small text-muted mb-0">暂无记录</div>
+              <template v-else>
+                <div class="table-responsive mb-2">
+                  <table class="table table-sm table-bordered align-middle mb-0 linked-okx-table">
+                    <thead class="table-light">
+                      <tr>
+                        <th>时间</th>
+                        <th>合约</th>
+                        <th>模式</th>
+                        <th>仓位保证金变动</th>
+                        <th>子类型</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr v-for="(r, i) in linkedBillsPageSlice" :key="'lb-' + linkedBillsPage + '-' + i">
+                        <td class="nowrap sm">{{ formatLinkedTs(pickLinkedStr(r, ['ts'])) }}</td>
+                        <td class="mono sm">{{ pickLinkedStr(r, ['instId']) }}</td>
+                        <td>{{ pickLinkedStr(r, ['mgnMode']) }}</td>
+                        <td class="mono sm">{{ pickLinkedStr(r, ['posBalChg']) }}</td>
+                        <td class="mono sm">{{ pickLinkedStr(r, ['subType']) }}</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+                <nav
+                  class="d-flex justify-content-center flex-wrap align-items-center gap-2 mb-0"
+                  aria-label="保证金账单分页"
+                >
+                  <button
+                    type="button"
+                    class="btn btn-sm btn-primary"
+                    :disabled="linkedBillsPage <= 1"
+                    @click="goLinkedBillsPrev"
+                  >
+                    上一页
+                  </button>
+                  <span class="text-nowrap small text-muted">
+                    第 {{ linkedBillsPage }} / {{ linkedBillsTotalPages }} 页，共 {{ linkedBillsRows.length }} 条（每页
+                    {{ LINKED_OKX_PAGE_SIZE }} 条）
+                  </span>
+                  <button
+                    type="button"
+                    class="btn btn-sm btn-primary"
+                    :disabled="linkedBillsPage >= linkedBillsTotalPages"
+                    @click="goLinkedBillsNext"
+                  >
+                    下一页
+                  </button>
+                </nav>
+              </template>
+            </section>
+            <section v-else class="linked-okx-card card-block">
+              <h2 class="mb-2 detail-panel-title">
+                <span class="btn btn-secondary">本人 OKX</span>
+              </h2>
+              <p class="small text-muted mb-0">
+                在右侧「跟单详情」绑定 API 后，上方「跟单持仓」展示永续持仓；此处展示成交与保证金流水。
+              </p>
+            </section>
           </div>
 
           <div class="detail-col-info">
@@ -1849,74 +2013,6 @@ const eventPnlTone = (e: PositionEventRow): PnlTone => {
                     <span v-if="configMsg" class="small text-muted">{{ configMsg }}</span>
                   </div>
                 </form>
-              </section>
-
-              <section v-if="current?.okx_api_account_id" class="linked-okx-card card-block">
-                <h2 class="mb-2 detail-panel-title">
-                  <span
-                    class="btn btn-warning hint-cursor"
-                    title="成交与保证金流水来自欧易私有接口；永续持仓已集中在左侧「跟单持仓」（同一密钥、同一轮询）。"
-                  >本人 OKX（绑定帐户）</span>
-                </h2>
-                <p v-if="linkedOkxErr" class="small text-danger mb-2">{{ linkedOkxErr }}</p>
-                <h3 class="h6 mb-2">我的成交</h3>
-                <div v-if="linkedFillsRows.length === 0" class="small text-muted mb-3">暂无成交</div>
-                <div v-else class="table-responsive mb-3">
-                  <table class="table table-sm table-bordered align-middle mb-0 linked-okx-table">
-                    <thead class="table-light">
-                      <tr>
-                        <th>时间</th>
-                        <th>合约</th>
-                        <th>方向</th>
-                        <th>持仓方向</th>
-                        <th>成交价</th>
-                        <th>数量</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      <tr v-for="(r, i) in linkedFillsRows" :key="'f-' + i">
-                        <td class="nowrap sm">{{ formatLinkedTs(pickLinkedStr(r, ['fillTime', 'ts'])) }}</td>
-                        <td class="mono sm">{{ pickLinkedStr(r, ['instId']) }}</td>
-                        <td>{{ pickLinkedStr(r, ['side']) }}</td>
-                        <td>{{ pickLinkedStr(r, ['posSide']) }}</td>
-                        <td class="mono sm">{{ pickLinkedStr(r, ['fillPx', 'px']) }}</td>
-                        <td class="mono sm">{{ pickLinkedStr(r, ['fillSz', 'sz']) }}</td>
-                      </tr>
-                    </tbody>
-                  </table>
-                </div>
-                <h3 class="h6 mb-2">保证金划转（账单 type=6）</h3>
-                <div v-if="linkedBillsRows.length === 0" class="small text-muted mb-0">暂无记录</div>
-                <div v-else class="table-responsive mb-0">
-                  <table class="table table-sm table-bordered align-middle mb-0 linked-okx-table">
-                    <thead class="table-light">
-                      <tr>
-                        <th>时间</th>
-                        <th>合约</th>
-                        <th>模式</th>
-                        <th>仓位保证金变动</th>
-                        <th>子类型</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      <tr v-for="(r, i) in linkedBillsRows" :key="'b-' + i">
-                        <td class="nowrap sm">{{ formatLinkedTs(pickLinkedStr(r, ['ts'])) }}</td>
-                        <td class="mono sm">{{ pickLinkedStr(r, ['instId']) }}</td>
-                        <td>{{ pickLinkedStr(r, ['mgnMode']) }}</td>
-                        <td class="mono sm">{{ pickLinkedStr(r, ['posBalChg']) }}</td>
-                        <td class="mono sm">{{ pickLinkedStr(r, ['subType']) }}</td>
-                      </tr>
-                    </tbody>
-                  </table>
-                </div>
-              </section>
-              <section v-else class="linked-okx-card card-block">
-                <h2 class="mb-2 detail-panel-title">
-                  <span class="btn btn-secondary">本人 OKX</span>
-                </h2>
-                <p class="small text-muted mb-0">
-                  绑定后左侧「跟单持仓」展示该 API 的永续持仓；此处展示成交与保证金流水。
-                </p>
               </section>
           </div>
         </div>
