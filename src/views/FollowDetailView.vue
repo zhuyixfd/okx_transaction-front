@@ -180,6 +180,8 @@ const linkedPosRows = ref<Record<string, unknown>[]>([])
 /** 跟单持仓（欧易 positions）最近一次成功拉取时间，用于「更新时间」列（与对方快照 refreshed_at 对齐语义） */
 const linkedOkxFetchedAt = ref<string | null>(null)
 const linkedOkxErr = ref('')
+/** 每次发起本人 OKX 三联请求前递增，用于丢弃慢于后一轮的过期响应，避免表格闪空 */
+const linkedOkxFetchGeneration = ref(0)
 const linkedFillsPage = ref(1)
 const linkedBillsPage = ref(1)
 
@@ -261,6 +263,7 @@ const loadLinkedOkxTradeData = async (silent = false) => {
   const un = paramUniqueName.value
   const c = current.value
   if (!un || !c?.okx_api_account_id) {
+    linkedOkxFetchGeneration.value += 1
     linkedFillsRows.value = []
     linkedBillsRows.value = []
     linkedPosRows.value = []
@@ -268,6 +271,11 @@ const loadLinkedOkxTradeData = async (silent = false) => {
     if (!silent) linkedOkxErr.value = ''
     return
   }
+  linkedOkxFetchGeneration.value += 1
+  const gen = linkedOkxFetchGeneration.value
+  const startUn = un
+  const startOkxId = c.okx_api_account_id
+
   if (!silent) linkedOkxErr.value = ''
   const q = new URLSearchParams({ unique_name: un })
   try {
@@ -287,23 +295,37 @@ const loadLinkedOkxTradeData = async (silent = false) => {
       bRes.json().catch(() => ({})),
       pRes.json().catch(() => ({})),
     ])
-    linkedFillsRows.value = _linkedDataArr(fRes, fj)
-    linkedBillsRows.value = _linkedDataArr(bRes, bj)
-    linkedPosRows.value = _linkedDataArr(pRes, pj)
+    if (
+      gen !== linkedOkxFetchGeneration.value ||
+      paramUniqueName.value !== startUn ||
+      current.value?.okx_api_account_id !== startOkxId
+    ) {
+      return
+    }
+    // 仅成功响应覆盖列表；失败或 502 保留上一轮数据，避免「我的持仓」闪空
+    if (fRes.ok) linkedFillsRows.value = _linkedDataArr(fRes, fj)
+    if (bRes.ok) linkedBillsRows.value = _linkedDataArr(bRes, bj)
     if (pRes.ok) {
+      linkedPosRows.value = _linkedDataArr(pRes, pj)
       linkedOkxFetchedAt.value = new Date().toISOString()
     }
     if (!silent) {
       if (!fRes.ok) linkedOkxErr.value = _linkedErrText(fRes, fj)
       else if (!bRes.ok) linkedOkxErr.value = _linkedErrText(bRes, bj)
       else if (!pRes.ok) linkedOkxErr.value = _linkedErrText(pRes, pj)
+      else linkedOkxErr.value = ''
+    } else if (fRes.ok && bRes.ok && pRes.ok) {
+      linkedOkxErr.value = ''
     }
   } catch (e: unknown) {
+    if (
+      gen !== linkedOkxFetchGeneration.value ||
+      paramUniqueName.value !== startUn ||
+      current.value?.okx_api_account_id !== startOkxId
+    ) {
+      return
+    }
     if (!silent) linkedOkxErr.value = e instanceof Error ? e.message : '网络错误'
-    linkedFillsRows.value = []
-    linkedBillsRows.value = []
-    linkedPosRows.value = []
-    linkedOkxFetchedAt.value = null
   }
 }
 
