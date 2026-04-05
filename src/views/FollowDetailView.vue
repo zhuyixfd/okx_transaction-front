@@ -688,6 +688,23 @@ const linkedPosRoiDisplay = (r: Record<string, unknown>): string => {
   )
 }
 
+/** 跟单持仓行盈亏色：优先用欧易 upl（与收益额一致），否则回退均价/标记价推算 */
+const linkedPosPnlTone = (r: Record<string, unknown>): PnlTone => {
+  const uplRaw = pickLinkedStr(r, ['upl'])
+  if (uplRaw !== '—') {
+    const t = toneFromNumber(parsePnlString(uplRaw))
+    if (t !== 'neutral') return t
+  }
+  const avg = pickLinkedStr(r, ['avgPx'])
+  const mark = pickLinkedStr(r, ['markPx', 'last'])
+  const side = pickLinkedStr(r, ['posSide'])
+  return pnlToneFromAvgMark(
+    avg === '—' ? null : avg,
+    mark === '—' ? null : mark,
+    side === '—' ? null : side,
+  )
+}
+
 const eventRoiDisplay = (e: PositionEventRow): string => {
   const api = formatApiUplRatio(e.upl_ratio)
   if (api) return api
@@ -761,6 +778,49 @@ const simTotalPnlTone = computed(() => toneFromSumString(simTotalPnl.value))
 const simRealizedPnlTone = computed(() => toneFromSumString(simRealizedSum.value))
 
 const simUnrealizedPnlTone = computed(() => toneFromSumString(simUnrealizedSum.value))
+
+/** 对方快照 + 本人绑定仓：汇总提示（两栏共用同一套数字） */
+const combinedHoldingsSectionHint =
+  '总收益 = 已实现 + 浮动。浮动 =「对方持仓」各仓收益额（upl）与「我的持仓」各仓 upl 相加；当前仅有未平仓 upl，已实现显示 0。'
+
+const snapshotUplSumUsdt = computed(() => {
+  let s = 0
+  for (const p of snapshot.value?.positions ?? []) {
+    const n = parsePnlString(p.upl)
+    if (n !== null) s += n
+  }
+  return s
+})
+
+const linkedUplSumUsdt = computed(() => {
+  let s = 0
+  for (const r of linkedPosRows.value) {
+    const raw = pickLinkedStr(r, ['upl'])
+    if (raw === '—') continue
+    const n = parsePnlString(raw)
+    if (n !== null) s += n
+  }
+  return s
+})
+
+/** 已实现：双方当前表均无已平仓分项，固定 0 */
+const combinedHoldingsRealizedUsdt = computed(() => 0)
+const combinedHoldingsUnrealizedUsdt = computed(
+  () => snapshotUplSumUsdt.value + linkedUplSumUsdt.value,
+)
+const combinedHoldingsTotalUsdt = computed(
+  () => combinedHoldingsRealizedUsdt.value + combinedHoldingsUnrealizedUsdt.value,
+)
+
+const combinedHoldingsTotalTone = computed(() =>
+  toneFromNumber(combinedHoldingsTotalUsdt.value),
+)
+const combinedHoldingsRealizedTone = computed(() =>
+  toneFromNumber(combinedHoldingsRealizedUsdt.value),
+)
+const combinedHoldingsUnrealizedTone = computed(() =>
+  toneFromNumber(combinedHoldingsUnrealizedUsdt.value),
+)
 
 const goSimPrev = () => {
   if (simPage.value <= 1) return
@@ -1267,14 +1327,7 @@ const linkedPosRowsDecorated = computed(() =>
       })
     })
     .map((r) => {
-      const avg = pickLinkedStr(r, ['avgPx'])
-      const mark = pickLinkedStr(r, ['markPx', 'last'])
-      const side = pickLinkedStr(r, ['posSide'])
-      const tone = pnlToneFromAvgMark(
-        avg === '—' ? null : avg,
-        mark === '—' ? null : mark,
-        side === '—' ? null : side,
-      )
+      const tone = linkedPosPnlTone(r)
       return {
         r,
         tone,
@@ -1371,6 +1424,42 @@ const eventPnlTone = (e: PositionEventRow): PnlTone => {
               :title="snapshotSectionHint"
             >对方持仓</span>
           </h2>
+          <div class="sim-totals subsection-gap" :title="combinedHoldingsSectionHint">
+            <span class="sim-total-pill">
+              总收益（USDT）<strong
+                class="mono sim-total-pnl-val"
+                :class="{
+                  'sim-total-pnl-pos': combinedHoldingsTotalTone === 'pos',
+                  'sim-total-pnl-neg': combinedHoldingsTotalTone === 'neg',
+                  'sim-total-pnl-zero': combinedHoldingsTotalTone === 'zero',
+                  'sim-total-pnl-neutral': combinedHoldingsTotalTone === 'neutral',
+                }"
+              >{{ formatUsdt3(combinedHoldingsTotalUsdt) }}</strong>
+            </span>
+            <span class="sim-total-meta small">
+              <span class="text-muted">已实现 </span>
+              <strong
+                class="mono sim-sub-pnl-val"
+                :class="{
+                  'sim-total-pnl-pos': combinedHoldingsRealizedTone === 'pos',
+                  'sim-total-pnl-neg': combinedHoldingsRealizedTone === 'neg',
+                  'sim-total-pnl-zero': combinedHoldingsRealizedTone === 'zero',
+                  'sim-total-pnl-neutral': combinedHoldingsRealizedTone === 'neutral',
+                }"
+              >{{ formatUsdt3(combinedHoldingsRealizedUsdt) }}</strong>
+              <span class="text-muted"> · </span>
+              <span class="text-muted">浮动 </span>
+              <strong
+                class="mono sim-sub-pnl-val"
+                :class="{
+                  'sim-total-pnl-pos': combinedHoldingsUnrealizedTone === 'pos',
+                  'sim-total-pnl-neg': combinedHoldingsUnrealizedTone === 'neg',
+                  'sim-total-pnl-zero': combinedHoldingsUnrealizedTone === 'zero',
+                  'sim-total-pnl-neutral': combinedHoldingsUnrealizedTone === 'neutral',
+                }"
+              >{{ formatUsdt3(combinedHoldingsUnrealizedUsdt) }}</strong>
+            </span>
+          </div>
           <div v-if="snapshotLoading && !snapshot" class="muted">加载快照中…</div>
           <div v-else-if="snapshotError" class="aside-err">{{ snapshotError }}</div>
           <template v-else-if="snapshot">
@@ -1435,6 +1524,42 @@ const eventPnlTone = (e: PositionEventRow): PnlTone => {
               :title="followMyPositionsSectionHint"
             >我的持仓</span>
           </h2>
+          <div class="sim-totals subsection-gap" :title="combinedHoldingsSectionHint">
+            <span class="sim-total-pill">
+              总收益（USDT）<strong
+                class="mono sim-total-pnl-val"
+                :class="{
+                  'sim-total-pnl-pos': combinedHoldingsTotalTone === 'pos',
+                  'sim-total-pnl-neg': combinedHoldingsTotalTone === 'neg',
+                  'sim-total-pnl-zero': combinedHoldingsTotalTone === 'zero',
+                  'sim-total-pnl-neutral': combinedHoldingsTotalTone === 'neutral',
+                }"
+              >{{ formatUsdt3(combinedHoldingsTotalUsdt) }}</strong>
+            </span>
+            <span class="sim-total-meta small">
+              <span class="text-muted">已实现 </span>
+              <strong
+                class="mono sim-sub-pnl-val"
+                :class="{
+                  'sim-total-pnl-pos': combinedHoldingsRealizedTone === 'pos',
+                  'sim-total-pnl-neg': combinedHoldingsRealizedTone === 'neg',
+                  'sim-total-pnl-zero': combinedHoldingsRealizedTone === 'zero',
+                  'sim-total-pnl-neutral': combinedHoldingsRealizedTone === 'neutral',
+                }"
+              >{{ formatUsdt3(combinedHoldingsRealizedUsdt) }}</strong>
+              <span class="text-muted"> · </span>
+              <span class="text-muted">浮动 </span>
+              <strong
+                class="mono sim-sub-pnl-val"
+                :class="{
+                  'sim-total-pnl-pos': combinedHoldingsUnrealizedTone === 'pos',
+                  'sim-total-pnl-neg': combinedHoldingsUnrealizedTone === 'neg',
+                  'sim-total-pnl-zero': combinedHoldingsUnrealizedTone === 'zero',
+                  'sim-total-pnl-neutral': combinedHoldingsUnrealizedTone === 'neutral',
+                }"
+              >{{ formatUsdt3(combinedHoldingsUnrealizedUsdt) }}</strong>
+            </span>
+          </div>
           <div v-if="!current?.okx_api_account_id" class="muted mb-0">
             请先在右侧绑定 OKX API 帐户。绑定后此处展示该密钥在欧易的 U 本位永续持仓（私有接口 positions），与「对方持仓」社区数据无关。
           </div>
@@ -1479,7 +1604,7 @@ const eventPnlTone = (e: PositionEventRow): PnlTone => {
                       <td>{{ instIdBaseCcy(pickLinkedStr(row.r, ['instId'])) }}</td>
                       <td>{{ formatPosSide(pickLinkedStr(row.r, ['posSide'])) }}</td>
                       <td>{{ formatLever(pickLinkedStr(row.r, ['lever'])) }}</td>
-                      <td :class="uplCellClass(pickLinkedStr(row.r, ['upl']))">{{
+                      <td :class="roiClassFromTone(row.tone)">{{
                         formatUplUsdt(pickLinkedStr(row.r, ['upl']))
                       }}</td>
                       <td :class="roiClassFromTone(row.tone)">{{ linkedPosRoiDisplay(row.r) }}</td>
@@ -2376,6 +2501,19 @@ const eventPnlTone = (e: PositionEventRow): PnlTone => {
 .roi-pct-pos,
 .roi-pct-neg {
   font-weight: 700;
+}
+
+/* 盈亏数字：盈利绿、亏损红（与行底色并存时仍清晰） */
+.roi-pct-pos {
+  color: #198754 !important;
+}
+
+.roi-pct-neg {
+  color: #dc3545 !important;
+}
+
+.roi-pct-zero {
+  color: #6c757d !important;
 }
 
 /* 盈亏行：盈绿、亏红、平灰（覆盖 Bootstrap 条纹） */
