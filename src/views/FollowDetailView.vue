@@ -779,9 +779,13 @@ const simRealizedPnlTone = computed(() => toneFromSumString(simRealizedSum.value
 
 const simUnrealizedPnlTone = computed(() => toneFromSumString(simUnrealizedSum.value))
 
-/** 对方快照 + 本人绑定仓：汇总提示（两栏共用同一套数字） */
-const combinedHoldingsSectionHint =
-  '总收益 = 已实现 + 浮动。浮动 =「对方持仓」各仓收益额（upl）与「我的持仓」各仓 upl 相加；当前仅有未平仓 upl，已实现显示 0。'
+/** 对方快照表头汇总：各仓 upl 之和 */
+const snapshotHoldingsSectionHint =
+  '总收益 = 已实现 + 浮动。浮动 = 本表「对方持仓」各行收益额（upl）之和；当前无已平仓分项，已实现显示 0。'
+
+/** 本人 OKX 持仓表头汇总：各仓 upl 之和 */
+const linkedHoldingsSectionHint =
+  '总收益 = 已实现 + 浮动。浮动 = 本表「我的持仓」各行收益额（upl）之和；当前无已平仓分项，已实现显示 0。'
 
 const snapshotUplSumUsdt = computed(() => {
   let s = 0
@@ -803,23 +807,37 @@ const linkedUplSumUsdt = computed(() => {
   return s
 })
 
-/** 已实现：双方当前表均无已平仓分项，固定 0 */
-const combinedHoldingsRealizedUsdt = computed(() => 0)
-const combinedHoldingsUnrealizedUsdt = computed(
-  () => snapshotUplSumUsdt.value + linkedUplSumUsdt.value,
-)
-const combinedHoldingsTotalUsdt = computed(
-  () => combinedHoldingsRealizedUsdt.value + combinedHoldingsUnrealizedUsdt.value,
+/** 已实现：两表均无已平仓分项，固定 0 */
+const snapshotHoldingsRealizedUsdt = computed(() => 0)
+const snapshotHoldingsUnrealizedUsdt = computed(() => snapshotUplSumUsdt.value)
+const snapshotHoldingsTotalUsdt = computed(
+  () => snapshotHoldingsRealizedUsdt.value + snapshotHoldingsUnrealizedUsdt.value,
 )
 
-const combinedHoldingsTotalTone = computed(() =>
-  toneFromNumber(combinedHoldingsTotalUsdt.value),
+const snapshotHoldingsTotalTone = computed(() =>
+  toneFromNumber(snapshotHoldingsTotalUsdt.value),
 )
-const combinedHoldingsRealizedTone = computed(() =>
-  toneFromNumber(combinedHoldingsRealizedUsdt.value),
+const snapshotHoldingsRealizedTone = computed(() =>
+  toneFromNumber(snapshotHoldingsRealizedUsdt.value),
 )
-const combinedHoldingsUnrealizedTone = computed(() =>
-  toneFromNumber(combinedHoldingsUnrealizedUsdt.value),
+const snapshotHoldingsUnrealizedTone = computed(() =>
+  toneFromNumber(snapshotHoldingsUnrealizedUsdt.value),
+)
+
+const linkedHoldingsRealizedUsdt = computed(() => 0)
+const linkedHoldingsUnrealizedUsdt = computed(() => linkedUplSumUsdt.value)
+const linkedHoldingsTotalUsdt = computed(
+  () => linkedHoldingsRealizedUsdt.value + linkedHoldingsUnrealizedUsdt.value,
+)
+
+const linkedHoldingsTotalTone = computed(() =>
+  toneFromNumber(linkedHoldingsTotalUsdt.value),
+)
+const linkedHoldingsRealizedTone = computed(() =>
+  toneFromNumber(linkedHoldingsRealizedUsdt.value),
+)
+const linkedHoldingsUnrealizedTone = computed(() =>
+  toneFromNumber(linkedHoldingsUnrealizedUsdt.value),
 )
 
 const goSimPrev = () => {
@@ -1424,40 +1442,40 @@ const eventPnlTone = (e: PositionEventRow): PnlTone => {
               :title="snapshotSectionHint"
             >对方持仓</span>
           </h2>
-          <div class="sim-totals subsection-gap" :title="combinedHoldingsSectionHint">
+          <div class="sim-totals subsection-gap" :title="snapshotHoldingsSectionHint">
             <span class="sim-total-pill">
               总收益（USDT）<strong
                 class="mono sim-total-pnl-val"
                 :class="{
-                  'sim-total-pnl-pos': combinedHoldingsTotalTone === 'pos',
-                  'sim-total-pnl-neg': combinedHoldingsTotalTone === 'neg',
-                  'sim-total-pnl-zero': combinedHoldingsTotalTone === 'zero',
-                  'sim-total-pnl-neutral': combinedHoldingsTotalTone === 'neutral',
+                  'sim-total-pnl-pos': snapshotHoldingsTotalTone === 'pos',
+                  'sim-total-pnl-neg': snapshotHoldingsTotalTone === 'neg',
+                  'sim-total-pnl-zero': snapshotHoldingsTotalTone === 'zero',
+                  'sim-total-pnl-neutral': snapshotHoldingsTotalTone === 'neutral',
                 }"
-              >{{ formatUsdt3(combinedHoldingsTotalUsdt) }}</strong>
+              >{{ formatUsdt3(snapshotHoldingsTotalUsdt) }}</strong>
             </span>
             <span class="sim-total-meta small">
               <span class="text-muted">已实现 </span>
               <strong
                 class="mono sim-sub-pnl-val"
                 :class="{
-                  'sim-total-pnl-pos': combinedHoldingsRealizedTone === 'pos',
-                  'sim-total-pnl-neg': combinedHoldingsRealizedTone === 'neg',
-                  'sim-total-pnl-zero': combinedHoldingsRealizedTone === 'zero',
-                  'sim-total-pnl-neutral': combinedHoldingsRealizedTone === 'neutral',
+                  'sim-total-pnl-pos': snapshotHoldingsRealizedTone === 'pos',
+                  'sim-total-pnl-neg': snapshotHoldingsRealizedTone === 'neg',
+                  'sim-total-pnl-zero': snapshotHoldingsRealizedTone === 'zero',
+                  'sim-total-pnl-neutral': snapshotHoldingsRealizedTone === 'neutral',
                 }"
-              >{{ formatUsdt3(combinedHoldingsRealizedUsdt) }}</strong>
+              >{{ formatUsdt3(snapshotHoldingsRealizedUsdt) }}</strong>
               <span class="text-muted"> · </span>
               <span class="text-muted">浮动 </span>
               <strong
                 class="mono sim-sub-pnl-val"
                 :class="{
-                  'sim-total-pnl-pos': combinedHoldingsUnrealizedTone === 'pos',
-                  'sim-total-pnl-neg': combinedHoldingsUnrealizedTone === 'neg',
-                  'sim-total-pnl-zero': combinedHoldingsUnrealizedTone === 'zero',
-                  'sim-total-pnl-neutral': combinedHoldingsUnrealizedTone === 'neutral',
+                  'sim-total-pnl-pos': snapshotHoldingsUnrealizedTone === 'pos',
+                  'sim-total-pnl-neg': snapshotHoldingsUnrealizedTone === 'neg',
+                  'sim-total-pnl-zero': snapshotHoldingsUnrealizedTone === 'zero',
+                  'sim-total-pnl-neutral': snapshotHoldingsUnrealizedTone === 'neutral',
                 }"
-              >{{ formatUsdt3(combinedHoldingsUnrealizedUsdt) }}</strong>
+              >{{ formatUsdt3(snapshotHoldingsUnrealizedUsdt) }}</strong>
             </span>
           </div>
           <div v-if="snapshotLoading && !snapshot" class="muted">加载快照中…</div>
@@ -1524,40 +1542,40 @@ const eventPnlTone = (e: PositionEventRow): PnlTone => {
               :title="followMyPositionsSectionHint"
             >我的持仓</span>
           </h2>
-          <div class="sim-totals subsection-gap" :title="combinedHoldingsSectionHint">
+          <div class="sim-totals subsection-gap" :title="linkedHoldingsSectionHint">
             <span class="sim-total-pill">
               总收益（USDT）<strong
                 class="mono sim-total-pnl-val"
                 :class="{
-                  'sim-total-pnl-pos': combinedHoldingsTotalTone === 'pos',
-                  'sim-total-pnl-neg': combinedHoldingsTotalTone === 'neg',
-                  'sim-total-pnl-zero': combinedHoldingsTotalTone === 'zero',
-                  'sim-total-pnl-neutral': combinedHoldingsTotalTone === 'neutral',
+                  'sim-total-pnl-pos': linkedHoldingsTotalTone === 'pos',
+                  'sim-total-pnl-neg': linkedHoldingsTotalTone === 'neg',
+                  'sim-total-pnl-zero': linkedHoldingsTotalTone === 'zero',
+                  'sim-total-pnl-neutral': linkedHoldingsTotalTone === 'neutral',
                 }"
-              >{{ formatUsdt3(combinedHoldingsTotalUsdt) }}</strong>
+              >{{ formatUsdt3(linkedHoldingsTotalUsdt) }}</strong>
             </span>
             <span class="sim-total-meta small">
               <span class="text-muted">已实现 </span>
               <strong
                 class="mono sim-sub-pnl-val"
                 :class="{
-                  'sim-total-pnl-pos': combinedHoldingsRealizedTone === 'pos',
-                  'sim-total-pnl-neg': combinedHoldingsRealizedTone === 'neg',
-                  'sim-total-pnl-zero': combinedHoldingsRealizedTone === 'zero',
-                  'sim-total-pnl-neutral': combinedHoldingsRealizedTone === 'neutral',
+                  'sim-total-pnl-pos': linkedHoldingsRealizedTone === 'pos',
+                  'sim-total-pnl-neg': linkedHoldingsRealizedTone === 'neg',
+                  'sim-total-pnl-zero': linkedHoldingsRealizedTone === 'zero',
+                  'sim-total-pnl-neutral': linkedHoldingsRealizedTone === 'neutral',
                 }"
-              >{{ formatUsdt3(combinedHoldingsRealizedUsdt) }}</strong>
+              >{{ formatUsdt3(linkedHoldingsRealizedUsdt) }}</strong>
               <span class="text-muted"> · </span>
               <span class="text-muted">浮动 </span>
               <strong
                 class="mono sim-sub-pnl-val"
                 :class="{
-                  'sim-total-pnl-pos': combinedHoldingsUnrealizedTone === 'pos',
-                  'sim-total-pnl-neg': combinedHoldingsUnrealizedTone === 'neg',
-                  'sim-total-pnl-zero': combinedHoldingsUnrealizedTone === 'zero',
-                  'sim-total-pnl-neutral': combinedHoldingsUnrealizedTone === 'neutral',
+                  'sim-total-pnl-pos': linkedHoldingsUnrealizedTone === 'pos',
+                  'sim-total-pnl-neg': linkedHoldingsUnrealizedTone === 'neg',
+                  'sim-total-pnl-zero': linkedHoldingsUnrealizedTone === 'zero',
+                  'sim-total-pnl-neutral': linkedHoldingsUnrealizedTone === 'neutral',
                 }"
-              >{{ formatUsdt3(combinedHoldingsUnrealizedUsdt) }}</strong>
+              >{{ formatUsdt3(linkedHoldingsUnrealizedUsdt) }}</strong>
             </span>
           </div>
           <div v-if="!current?.okx_api_account_id" class="muted mb-0">
