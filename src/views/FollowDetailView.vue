@@ -1399,7 +1399,7 @@ const eventPnlTone = (e: PositionEventRow): PnlTone => {
             <span
               class="btn btn-warning hint-cursor"
               :title="followMyPositionsSectionHint"
-            >跟单持仓</span>
+            >我的持仓</span>
           </h2>
           <div v-if="!current?.okx_api_account_id" class="muted mb-0">
             请先在右侧绑定 OKX API 帐户。绑定后此处展示该密钥在欧易的 U 本位永续持仓（私有接口 positions），与「对方持仓」社区数据无关。
@@ -1482,7 +1482,7 @@ const eventPnlTone = (e: PositionEventRow): PnlTone => {
             <span
               class="btn btn-warning hint-cursor"
               :title="simRecordsSectionHint"
-            >模拟跟单资金</span>
+            >跟单持仓</span>
           </h2>
           <div class="sim-totals subsection-gap">
             <span class="sim-total-pill">
