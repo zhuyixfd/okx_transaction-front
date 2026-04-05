@@ -891,7 +891,7 @@ const eventPnlTone = (e: PositionEventRow): PnlTone => {
             <span
               class="btn btn-warning hint-cursor"
               :title="snapshotSectionHint"
-            >当前持仓</span>
+            >对方持仓</span>
           </h2>
           <div v-if="snapshotLoading && !snapshot" class="muted">加载快照中…</div>
           <div v-else-if="snapshotError" class="aside-err">{{ snapshotError }}</div>
@@ -950,7 +950,7 @@ const eventPnlTone = (e: PositionEventRow): PnlTone => {
             <span
               class="btn btn-warning hint-cursor"
               :title="simRecordsSectionHint"
-            >跟单记录</span>
+            >跟单持仓</span>
           </h2>
           <div class="sim-totals subsection-gap">
             <span class="sim-total-pill">
@@ -1079,7 +1079,7 @@ const eventPnlTone = (e: PositionEventRow): PnlTone => {
             <span
               class="btn btn-warning hint-cursor"
               :title="eventsSectionHint"
-            >开平仓记录</span>
+            >跟单记录</span>
           </h2>
           <div v-if="eventsLoading && eventsTotal === 0 && !eventsError" class="muted">加载记录中…</div>
           <div v-else-if="eventsError" class="aside-err">{{ eventsError }}</div>
