@@ -262,9 +262,13 @@ const maxFollowPositionsLabelHint =
 const snapshotSectionHint =
   '每 2 秒静默请求快照接口（不整页刷新）。标记价来自库表 follow_position_snapshots，启用时由后台轮询更新。'
 
-/** 悬停「跟单记录（模拟）」标题 */
+/** 悬停「模拟跟单资金」标题（follow_sim_records） */
 const simRecordsSectionHint =
-  '按「下注金额」模拟资金变动；开仓写入记录，平仓结算已实现盈亏。未平仓行随标记价更新浮动盈亏。总收益 = 已实现合计 + 未平仓浮动合计（随行情变动）。'
+  '按「下注金额」模拟资金变动；开仓写入记录，平仓结算已实现盈亏。未平仓行随标记价更新浮动盈亏。总收益 = 已实现合计 + 未平仓浮动合计（随行情变动）。仅模拟（未启用真实交易）时可删除单条记录；若对方该 posId 仍在持仓，监控会在下一轮再次生成模拟行。与「跟单持仓」欧易真实持仓无关。'
+
+/** 悬停「跟单持仓」：本人绑定 OKX 的永续持仓 */
+const followMyPositionsSectionHint =
+  '数据来自欧易私有接口 GET /api/v5/account/positions（SWAP），使用本页绑定的 API 密钥；与「对方持仓」社区接口、与下方「模拟跟单资金」表均无关。每 2 秒与本人成交、保证金流水一并刷新。'
 
 /** 悬停「开仓 / 平仓记录」标题 */
 const eventsSectionHint =
@@ -595,7 +599,7 @@ const eventRoiDisplay = (e: PositionEventRow): string => {
   return formatRoiPct(e.avg_px, eventMarkPx(e), e.pos_side)
 }
 
-/** 跟单持仓：按开仓均价与当前标记/平仓价算收益率 */
+/** 模拟行收益率：按开仓均价与当前标记/平仓价 */
 const simRoiDisplayRow = (r: FollowSimRecordRow): string => {
   const px =
     r.status === 'open' ? r.last_mark_px : (r.exit_px ?? r.last_mark_px)
@@ -1115,6 +1119,40 @@ const snapshotRowsDecorated = computed(() =>
 )
 
 /** 跟单记录：当前页内按币种排序（与持仓一致） */
+/** 仅模拟模式允许删库里的 follow_sim_records；与后端 DELETE 条件一致（看已保存的 live_trading_enabled）。 */
+const canDeleteSimRecords = computed(
+  () => !!current.value && !current.value.live_trading_enabled,
+)
+const simRecordDeletingId = ref<number | null>(null)
+
+const deleteSimRecord = async (r: FollowSimRecordRow) => {
+  if (!canDeleteSimRecords.value) return
+  if (!window.confirm(`确定删除该条模拟记录（订单编号 ${r.pos_id}）？`)) return
+  const un = paramUniqueName.value
+  if (!un) return
+  simRecordDeletingId.value = r.id
+  simError.value = ''
+  try {
+    const qs = new URLSearchParams({ unique_name: un })
+    const res = await fetch(
+      `${API_BASE}/follow-accounts/follow-sim-records/${r.id}?${qs}`,
+      { method: 'DELETE', headers: authHeaders() },
+    )
+    const body = (await res.json().catch(() => ({}))) as { detail?: unknown }
+    if (!res.ok) {
+      const d = body.detail
+      simError.value =
+        typeof d === 'string' ? d : d != null ? JSON.stringify(d) : `删除失败 (${res.status})`
+      return
+    }
+    await loadSimRecords(false)
+  } catch (e: unknown) {
+    simError.value = e instanceof Error ? e.message : '网络错误'
+  } finally {
+    simRecordDeletingId.value = null
+  }
+}
+
 const simRecordsSorted = computed(() =>
   [...simRecords.value].sort((a, b) => {
     const c = comparePosCcy(a.pos_ccy, b.pos_ccy)
@@ -1230,12 +1268,71 @@ const eventPnlTone = (e: PositionEventRow): PnlTone => {
           </template>
         </section>
 
+        <section class="card-block follow-my-positions-card">
+          <h2 class="mb-3 detail-panel-title">
+            <span
+              class="btn btn-warning hint-cursor"
+              :title="followMyPositionsSectionHint"
+            >跟单持仓</span>
+          </h2>
+          <div v-if="!current?.okx_api_account_id" class="muted mb-0">
+            请先在右侧绑定 OKX API 帐户。绑定后此处展示该密钥在欧易的 U 本位永续持仓（私有接口 positions），与「对方持仓」社区数据无关。
+          </div>
+          <template v-else>
+            <p v-if="linkedOkxErr" class="small text-danger mb-2">{{ linkedOkxErr }}</p>
+            <div v-if="linkedPosRows.length === 0" class="small text-muted mb-0">暂无持仓或暂无数据</div>
+            <div v-else class="detail-table-rounded">
+              <div class="table-responsive">
+                <table
+                  class="table table-striped table-hover table-sm table-bordered align-middle mb-0 table-pos-aligned linked-okx-table"
+                >
+                  <thead class="table-light">
+                    <tr>
+                      <th>持仓编号</th>
+                      <th>合约</th>
+                      <th>方向</th>
+                      <th>杠杆</th>
+                      <th>持仓量</th>
+                      <th>保证金</th>
+                      <th>维持保证金率</th>
+                      <th>开仓均价</th>
+                      <th>标记价</th>
+                      <th>未实现盈亏</th>
+                      <th>预估强平价</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr
+                      v-for="(r, i) in linkedPosRows"
+                      :key="'mypos-' + i + '-' + pickLinkedStr(r, ['posId', 'instId'])"
+                    >
+                      <td class="mono sm td-pos-id">{{ pickLinkedStr(r, ['posId']) }}</td>
+                      <td class="mono sm">{{ pickLinkedStr(r, ['instId']) }}</td>
+                      <td>{{ pickLinkedStr(r, ['posSide']) }}</td>
+                      <td class="mono sm">{{ pickLinkedStr(r, ['lever']) }}</td>
+                      <td class="mono sm">{{ pickLinkedStr(r, ['pos']) }}</td>
+                      <td class="mono sm">{{ pickLinkedStr(r, ['margin', 'imr']) }}</td>
+                      <td class="mono sm">{{ pickLinkedStr(r, ['mgnRatio']) }}</td>
+                      <td class="mono sm">{{ pickLinkedStr(r, ['avgPx']) }}</td>
+                      <td class="mono sm mark-col">{{ pickLinkedStr(r, ['markPx', 'last']) }}</td>
+                      <td class="mono sm" :class="uplCellClass(pickLinkedStr(r, ['upl']))">
+                        {{ formatUplUsdt(pickLinkedStr(r, ['upl'])) }}
+                      </td>
+                      <td class="mono sm">{{ pickLinkedStr(r, ['liqPx']) }}</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </template>
+        </section>
+
         <section class="card-block sim-records-card">
           <h2 class="mb-3 detail-panel-title">
             <span
               class="btn btn-warning hint-cursor"
               :title="simRecordsSectionHint"
-            >跟单持仓</span>
+            >模拟跟单资金</span>
           </h2>
           <div class="sim-totals subsection-gap">
             <span class="sim-total-pill">
@@ -1298,6 +1395,7 @@ const eventPnlTone = (e: PositionEventRow): PnlTone => {
                     <th>预估强平价</th>
                     <th>开仓时间</th>
                     <th>更新时间</th>
+                    <th v-if="canDeleteSimRecords">操作</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -1327,6 +1425,16 @@ const eventPnlTone = (e: PositionEventRow): PnlTone => {
                     <td class="mono sm">{{ simRecordExtraText(r.src_liq_px) || '—' }}</td>
                     <td class="nowrap sm">{{ formatTime(r.opened_at) }}</td>
                     <td class="nowrap sm">{{ simUpdatedCol(r) }}</td>
+                    <td v-if="canDeleteSimRecords" class="nowrap sm">
+                      <button
+                        type="button"
+                        class="btn btn-sm btn-outline-danger"
+                        :disabled="simRecordDeletingId === r.id"
+                        @click="deleteSimRecord(r)"
+                      >
+                        {{ simRecordDeletingId === r.id ? '删除中…' : '删除' }}
+                      </button>
+                    </td>
                   </tr>
                 </tbody>
               </table>
@@ -1334,7 +1442,7 @@ const eventPnlTone = (e: PositionEventRow): PnlTone => {
             </div>
             <nav
               class="mt-3 d-flex justify-content-center flex-wrap align-items-center gap-2 mb-0"
-              aria-label="跟单记录分页"
+              aria-label="模拟跟单资金分页"
             >
               <button
                 type="button"
@@ -1639,38 +1747,10 @@ const eventPnlTone = (e: PositionEventRow): PnlTone => {
                 <h2 class="mb-2 detail-panel-title">
                   <span
                     class="btn btn-warning hint-cursor"
-                    title="数据来自欧易私有接口，使用本页绑定的跟单帐户密钥；与「对方持仓/跟单持仓」模拟表相互独立。"
+                    title="成交与保证金流水来自欧易私有接口；永续持仓已集中在左侧「跟单持仓」（同一密钥、同一轮询）。"
                   >本人 OKX（绑定帐户）</span>
                 </h2>
                 <p v-if="linkedOkxErr" class="small text-danger mb-2">{{ linkedOkxErr }}</p>
-                <h3 class="h6 mb-2">我的持仓</h3>
-                <div v-if="linkedPosRows.length === 0" class="small text-muted mb-3">暂无持仓或暂无数据</div>
-                <div v-else class="table-responsive mb-3">
-                  <table class="table table-sm table-bordered align-middle mb-0 linked-okx-table">
-                    <thead class="table-light">
-                      <tr>
-                        <th>合约</th>
-                        <th>持仓方向</th>
-                        <th>持仓量</th>
-                        <th>开仓均价</th>
-                        <th>标记价</th>
-                        <th>未实现盈亏</th>
-                        <th>杠杆</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      <tr v-for="(r, i) in linkedPosRows" :key="'p-' + i">
-                        <td class="mono sm">{{ pickLinkedStr(r, ['instId']) }}</td>
-                        <td>{{ pickLinkedStr(r, ['posSide']) }}</td>
-                        <td class="mono sm">{{ pickLinkedStr(r, ['pos']) }}</td>
-                        <td class="mono sm">{{ pickLinkedStr(r, ['avgPx']) }}</td>
-                        <td class="mono sm">{{ pickLinkedStr(r, ['markPx', 'last']) }}</td>
-                        <td class="mono sm">{{ pickLinkedStr(r, ['upl']) }}</td>
-                        <td class="mono sm">{{ pickLinkedStr(r, ['lever']) }}</td>
-                      </tr>
-                    </tbody>
-                  </table>
-                </div>
                 <h3 class="h6 mb-2">我的成交</h3>
                 <div v-if="linkedFillsRows.length === 0" class="small text-muted mb-3">暂无成交</div>
                 <div v-else class="table-responsive mb-3">
@@ -1726,7 +1806,9 @@ const eventPnlTone = (e: PositionEventRow): PnlTone => {
                 <h2 class="mb-2 detail-panel-title">
                   <span class="btn btn-secondary">本人 OKX</span>
                 </h2>
-                <p class="small text-muted mb-0">绑定跟单帐户后，此处展示该 API 下的真实持仓、成交与保证金流水（与模拟跟单表独立）。</p>
+                <p class="small text-muted mb-0">
+                  绑定后左侧「跟单持仓」展示该 API 的永续持仓；此处展示成交与保证金流水。
+                </p>
               </section>
           </div>
         </div>
