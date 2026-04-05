@@ -1213,6 +1213,8 @@ const linkedPosRowsDecorated = computed(() =>
 const canDeleteSimRecords = computed(
   () => !!current.value && !current.value.live_trading_enabled,
 )
+const simRecordDeleteBlockedHint =
+  '已启用真实交易时不能删除模拟记录；请在右侧关闭「启用真实交易」后再删。'
 const simRecordDeletingId = ref<number | null>(null)
 
 const deleteSimRecord = async (r: FollowSimRecordRow) => {
@@ -1509,7 +1511,7 @@ const eventPnlTone = (e: PositionEventRow): PnlTone => {
                     <th>预估强平价</th>
                     <th>开仓时间</th>
                     <th>更新时间</th>
-                    <th v-if="canDeleteSimRecords">操作</th>
+                    <th class="nowrap sm">操作</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -1539,8 +1541,9 @@ const eventPnlTone = (e: PositionEventRow): PnlTone => {
                     <td class="mono sm">{{ simRecordExtraText(r.src_liq_px) || '—' }}</td>
                     <td class="nowrap sm">{{ formatTime(r.opened_at) }}</td>
                     <td class="nowrap sm">{{ simUpdatedCol(r) }}</td>
-                    <td v-if="canDeleteSimRecords" class="nowrap sm">
+                    <td class="nowrap sm">
                       <button
+                        v-if="canDeleteSimRecords"
                         type="button"
                         class="btn btn-sm btn-outline-danger"
                         :disabled="simRecordDeletingId === r.id"
@@ -1548,6 +1551,11 @@ const eventPnlTone = (e: PositionEventRow): PnlTone => {
                       >
                         {{ simRecordDeletingId === r.id ? '删除中…' : '删除' }}
                       </button>
+                      <span
+                        v-else
+                        class="text-muted small"
+                        :title="simRecordDeleteBlockedHint"
+                      >—</span>
                     </td>
                   </tr>
                 </tbody>
