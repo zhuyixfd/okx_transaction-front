@@ -46,6 +46,10 @@ type PositionEventRow = {
   upl_ratio?: string | null
   /** 来自接口 upl（USDT），未平仓行前端用快照覆盖 */
   upl?: string | null
+  pos?: string | null
+  margin?: string | null
+  mgn_ratio?: string | null
+  liq_px?: string | null
   c_time: string | null
   detail_json: string | null
   created_at: string
@@ -64,6 +68,10 @@ type PositionSnapshotRow = {
   upl_ratio?: string | null
   /** 欧易 upl，未实现盈亏（USDT） */
   upl?: string | null
+  pos?: string | null
+  margin?: string | null
+  mgn_ratio?: string | null
+  liq_px?: string | null
 }
 
 type PositionSnapshotPayload = {
@@ -89,11 +97,11 @@ type FollowSimRecordRow = {
   opened_at: string
   closed_at: string | null
   updated_at: string
-  /** 以下字段预留，接口未返回时为空 */
-  position_notional_usdt?: string | null
-  margin_usdt?: string | null
-  maint_margin_ratio?: string | null
-  est_liquidation_px?: string | null
+  /** 与对方持仓同步（community position-current） */
+  src_pos?: string | null
+  src_margin?: string | null
+  src_mgn_ratio?: string | null
+  src_liq_px?: string | null
 }
 
 const props = defineProps<{
@@ -468,6 +476,37 @@ const eventRoiDisplay = (e: PositionEventRow): string => {
   return formatRoiPct(e.avg_px, eventMarkPx(e), e.pos_side)
 }
 
+/** 跟单持仓：按开仓均价与当前标记/平仓价算收益率 */
+const simRoiDisplayRow = (r: FollowSimRecordRow): string => {
+  const px =
+    r.status === 'open' ? r.last_mark_px : (r.exit_px ?? r.last_mark_px)
+  return formatRoiPct(r.entry_avg_px, px ?? null, r.pos_side)
+}
+
+const simRowMarkTone = (r: FollowSimRecordRow): PnlTone =>
+  pnlToneFromAvgMark(
+    r.entry_avg_px,
+    simPxLabel(r) === '—' ? null : simPxLabel(r),
+    r.pos_side,
+  )
+
+/** 已平仓用平仓时间，在仓用记录更新时间 */
+const simUpdatedCol = (r: FollowSimRecordRow): string => {
+  if (r.status === 'closed' && r.closed_at) return formatTime(r.closed_at)
+  return formatTime(r.updated_at)
+}
+
+/** 跟单记录：开仓时间（接口 cTime 毫秒/秒；无则回退事件时间） */
+const formatEventOpenTime = (e: PositionEventRow): string => {
+  const ct = e.c_time
+  if (ct != null && String(ct).trim() !== '') {
+    const n = Number(String(ct).trim())
+    if (Number.isFinite(n) && n >= 1e12) return formatTime(new Date(n).toISOString())
+    if (Number.isFinite(n) && n >= 1e9) return formatTime(new Date(n * 1000).toISOString())
+  }
+  return formatTime(e.created_at)
+}
+
 const roiClassFromTone = (t: PnlTone): string => {
   if (t === 'pos') return 'mono sm roi-pct roi-pct-pos'
   if (t === 'neg') return 'mono sm roi-pct roi-pct-neg'
@@ -782,12 +821,6 @@ const formatUplUsdt = (raw: string | null | undefined): string =>
 const uplCellClass = (raw: string | null | undefined): string =>
   roiClassFromTone(toneFromNumber(parsePnlString(raw)))
 
-/** 平仓时间：仅平仓事件行展示写入时间；开仓行或未平仓显示 — */
-const eventCloseTimeForCell = (e: PositionEventRow): string => {
-  if (e.event_type !== 'close') return '—'
-  return formatTime(e.created_at)
-}
-
 /** 展示用盈亏：在跟为浮动，已平仓为已实现 */
 const simPnlDisplay = (r: FollowSimRecordRow) => {
   if (r.status === 'open') return r.unrealized_pnl_usdt
@@ -804,6 +837,56 @@ const simPnlTone = (r: FollowSimRecordRow): PnlTone =>
 const simRecordExtraText = (raw: string | null | undefined): string => {
   if (raw == null || String(raw).trim() === '') return ''
   return String(raw).trim()
+}
+
+/** 保证金：可解析为数字时四舍五入保留 2 位小数 */
+const formatMarginRound2 = (raw: string | null | undefined): string => {
+  if (raw == null || String(raw).trim() === '') return '—'
+  const s = String(raw).trim().replace(/,/g, '')
+  const n = Number(s)
+  if (!Number.isFinite(n)) return String(raw).trim()
+  return (Math.round(n * 100) / 100).toFixed(2)
+}
+
+const formatMarginWithU = (raw: string | null | undefined): string => {
+  const s = formatMarginRound2(raw)
+  return s === '—' ? '—' : `${s}u`
+}
+
+/** 持仓量：数字后加「张」 */
+const formatPosContractsDisplay = (raw: string | null | undefined): string => {
+  const t = simRecordExtraText(raw)
+  return t === '' ? '—' : `${t}张`
+}
+
+/** 维持保证金率：×100 后四舍五入保留 2 位小数，并加 % */
+const formatMaintMarginRatioPct = (raw: string | null | undefined): string => {
+  if (raw == null || String(raw).trim() === '') return '—'
+  const s = String(raw).trim().replace(/,/g, '')
+  const n = Number(s)
+  if (!Number.isFinite(n)) return String(raw).trim()
+  const pct = n * 100
+  return (Math.round(pct * 100) / 100).toFixed(2) + '%'
+}
+
+/** 开平仓行：未平仓时优先用当前快照里的对方指标 */
+const eventLiveMetric = (
+  e: PositionEventRow,
+  snapKey: keyof PositionSnapshotRow,
+  eventKey: keyof PositionEventRow,
+): string => {
+  if (!positionClosedForEvent(e) && e.pos_id) {
+    const snap = snapshotByPosId.value.get(e.pos_id)
+    const live = snap?.[snapKey]
+    if (live != null && String(live).trim() !== '') return String(live).trim()
+  }
+  const v = e[eventKey]
+  return simRecordExtraText(v as string | null | undefined)
+}
+
+const formatEventPosContracts = (e: PositionEventRow): string => {
+  const v = eventLiveMetric(e, 'pos', 'pos')
+  return v === '' ? '—' : `${v}张`
 }
 
 /** 按币种字母序 a→z，不区分大小写；无币种排最后；同币种再按 posId 稳定排序 */
@@ -906,14 +989,18 @@ const eventPnlTone = (e: PositionEventRow): PnlTone => {
               >
                 <thead class="table-light">
                   <tr>
-                    <th>posId</th>
+                    <th>订单编号</th>
                     <th>币种</th>
                     <th>方向</th>
                     <th>杠杆</th>
-                    <th>开仓均价</th>
-                    <th>标记价</th>
+                    <th>收益额</th>
                     <th>收益率</th>
-                    <th>盈亏（USDT）</th>
+                    <th>持仓量</th>
+                    <th>保证金</th>
+                    <th>维持保证金率</th>
+                    <th>开仓均价</th>
+                    <th>标记价格</th>
+                    <th>预估强平价</th>
                     <th>开仓时间</th>
                     <th>更新时间</th>
                   </tr>
@@ -931,10 +1018,14 @@ const eventPnlTone = (e: PositionEventRow): PnlTone => {
                     <td>{{ row.p.pos_ccy ?? '—' }}</td>
                     <td>{{ formatPosSide(row.p.pos_side) }}</td>
                     <td>{{ formatLever(row.p.lever) }}</td>
+                    <td :class="uplCellClass(row.p.upl)">{{ formatUplUsdt(row.p.upl) }}</td>
+                    <td :class="roiClassFromTone(row.tone)">{{ snapshotRoiDisplay(row.p) }}</td>
+                    <td class="mono sm">{{ formatPosContractsDisplay(row.p.pos) }}</td>
+                    <td class="mono sm">{{ formatMarginWithU(row.p.margin) }}</td>
+                    <td class="mono sm">{{ formatMaintMarginRatioPct(row.p.mgn_ratio) }}</td>
                     <td class="mono sm">{{ formatAvgPx(row.p.avg_px) }}</td>
                     <td class="mono sm mark-col">{{ row.p.last_px ?? '—' }}</td>
-                    <td :class="roiClassFromTone(row.tone)">{{ snapshotRoiDisplay(row.p) }}</td>
-                    <td :class="uplCellClass(row.p.upl)">{{ formatUplUsdt(row.p.upl) }}</td>
+                    <td class="mono sm">{{ simRecordExtraText(row.p.liq_px) || '—' }}</td>
                     <td class="nowrap sm">{{ row.p.c_time_format ?? '—' }}</td>
                     <td class="nowrap sm">{{ formatTime(snapshot.refreshed_at) }}</td>
                   </tr>
@@ -999,20 +1090,21 @@ const eventPnlTone = (e: PositionEventRow): PnlTone => {
               >
                 <thead class="table-light">
                   <tr>
-                    <th>posId</th>
+                    <th>订单编号</th>
                     <th>币种</th>
                     <th>方向</th>
                     <th>杠杆</th>
                     <th>本金</th>
+                    <th>收益额</th>
+                    <th>收益率</th>
+                    <th>持仓量</th>
+                    <th>保证金</th>
+                    <th>维持保证金率</th>
                     <th>开仓均价</th>
                     <th>标记价格</th>
-                    <th>盈亏（USDT）</th>
+                    <th>预估强平价</th>
                     <th>开仓时间</th>
-                    <th>平仓时间</th>
-                    <th>持仓量（USDT）</th>
-                    <th>保证金（USDT）</th>
-                    <th>维持保证金率</th>
-                    <th>预估强平价格</th>
+                    <th>更新时间</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -1032,15 +1124,16 @@ const eventPnlTone = (e: PositionEventRow): PnlTone => {
                     <td>{{ formatPosSide(r.pos_side) }}</td>
                     <td>{{ simLeverDisplay(r) }}</td>
                     <td class="mono sm">{{ formatUsdt3(r.stake_usdt) }}</td>
+                    <td class="mono sm">{{ formatUsdt3(simPnlDisplay(r)) }}</td>
+                    <td :class="roiClassFromTone(simRowMarkTone(r))">{{ simRoiDisplayRow(r) }}</td>
+                    <td class="mono sm">{{ formatPosContractsDisplay(r.src_pos) }}</td>
+                    <td class="mono sm">{{ formatMarginWithU(r.src_margin) }}</td>
+                    <td class="mono sm">{{ formatMaintMarginRatioPct(r.src_mgn_ratio) }}</td>
                     <td class="mono sm">{{ formatAvgPx(r.entry_avg_px) }}</td>
                     <td class="mono sm">{{ simPxLabel(r) }}</td>
-                    <td class="mono sm">{{ formatUsdt3(simPnlDisplay(r)) }}</td>
+                    <td class="mono sm">{{ simRecordExtraText(r.src_liq_px) || '—' }}</td>
                     <td class="nowrap sm">{{ formatTime(r.opened_at) }}</td>
-                    <td class="nowrap sm">{{ formatTime(r.closed_at) }}</td>
-                    <td class="mono sm">{{ simRecordExtraText(r.position_notional_usdt) }}</td>
-                    <td class="mono sm">{{ simRecordExtraText(r.margin_usdt) }}</td>
-                    <td class="mono sm">{{ simRecordExtraText(r.maint_margin_ratio) }}</td>
-                    <td class="mono sm">{{ simRecordExtraText(r.est_liquidation_px) }}</td>
+                    <td class="nowrap sm">{{ simUpdatedCol(r) }}</td>
                   </tr>
                 </tbody>
               </table>
@@ -1092,16 +1185,17 @@ const eventPnlTone = (e: PositionEventRow): PnlTone => {
               >
                 <thead class="table-light">
                   <tr>
-                    <th>posId</th>
+                    <th>订单编号</th>
                     <th>币种</th>
                     <th>方向</th>
                     <th>杠杆</th>
+                    <th>收益额</th>
                     <th>收益率</th>
-                    <th>盈亏（USDT）</th>
-                    <th>获取/开仓时间</th>
+                    <th>持仓量</th>
                     <th>开仓均价</th>
-                    <th>平仓时间</th>
-                    <th>标记价/平仓均价</th>
+                    <th>标记价格</th>
+                    <th>开仓时间</th>
+                    <th>更新时间</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -1120,15 +1214,16 @@ const eventPnlTone = (e: PositionEventRow): PnlTone => {
                     <td>{{ e.pos_ccy ?? '—' }}</td>
                     <td>{{ formatPosSide(e.pos_side) }}</td>
                     <td>{{ formatLever(e.lever) }}</td>
-                    <td :class="roiClassFromTone(eventPnlTone(e))">{{ eventRoiDisplay(e) }}</td>
                     <td :class="uplCellClass(eventUplRaw(e))">{{ formatUplUsdt(eventUplRaw(e)) }}</td>
-                    <td class="nowrap">{{ formatTime(e.created_at) }}</td>
+                    <td :class="roiClassFromTone(eventPnlTone(e))">{{ eventRoiDisplay(e) }}</td>
+                    <td class="mono sm">{{ formatEventPosContracts(e) }}</td>
                     <td class="mono sm">{{ formatAvgPx(e.avg_px) }}</td>
-                    <td class="nowrap sm">{{ eventCloseTimeForCell(e) }}</td>
                     <td
                       class="mono sm"
                       :class="{ 'mark-col': !positionClosedForEvent(e) }"
                     >{{ eventMarkPx(e) }}</td>
+                    <td class="nowrap sm">{{ formatEventOpenTime(e) }}</td>
+                    <td class="nowrap sm">{{ formatTime(e.created_at) }}</td>
                   </tr>
                 </tbody>
               </table>
@@ -1692,6 +1787,13 @@ const eventPnlTone = (e: PositionEventRow): PnlTone => {
   font-size: 12px;
   font-weight: 600;
   padding: 0.4em 0.65em;
+}
+
+/* 三张持仓/记录表：表头与单元格一律右对齐；内容不换行（宽表横向滚动） */
+.table-pos-aligned th,
+.table-pos-aligned td {
+  text-align: right;
+  white-space: nowrap;
 }
 
 /* 当前持仓 / 跟单记录 / 开平仓：前四列均为 posId、币种、方向、杠杆，统一最小宽度便于上下对照 */
