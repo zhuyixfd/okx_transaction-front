@@ -175,6 +175,8 @@ const okxBindSaving = ref(false)
 const linkedFillsRows = ref<Record<string, unknown>[]>([])
 const linkedBillsRows = ref<Record<string, unknown>[]>([])
 const linkedPosRows = ref<Record<string, unknown>[]>([])
+/** 跟单持仓（欧易 positions）最近一次成功拉取时间，用于「更新时间」列（与对方快照 refreshed_at 对齐语义） */
+const linkedOkxFetchedAt = ref<string | null>(null)
 const linkedOkxErr = ref('')
 
 const pickLinkedStr = (row: Record<string, unknown>, keys: string[]) => {
@@ -190,6 +192,20 @@ const formatLinkedTs = (raw: string | number | undefined) => {
   const n = typeof raw === 'number' ? raw : Number(String(raw).trim())
   if (!Number.isFinite(n)) return String(raw)
   return new Date(n).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' })
+}
+
+/** 欧易 instId 如 BTC-USDT-SWAP → 币种 BTC（与对方 pos_ccy 列对齐） */
+const instIdBaseCcy = (instIdRaw: string): string => {
+  if (instIdRaw === '—' || !String(instIdRaw).trim()) return '—'
+  const s = String(instIdRaw).trim()
+  const i = s.indexOf('-')
+  return i > 0 ? s.slice(0, i) : s
+}
+
+const linkedOpenTimeDisplay = (r: Record<string, unknown>): string => {
+  const raw = pickLinkedStr(r, ['cTime'])
+  if (raw === '—') return '—'
+  return formatLinkedTs(raw)
 }
 
 const _linkedErrText = (res: Response, j: unknown): string => {
@@ -212,6 +228,7 @@ const loadLinkedOkxTradeData = async (silent = false) => {
     linkedFillsRows.value = []
     linkedBillsRows.value = []
     linkedPosRows.value = []
+    linkedOkxFetchedAt.value = null
     if (!silent) linkedOkxErr.value = ''
     return
   }
@@ -237,6 +254,9 @@ const loadLinkedOkxTradeData = async (silent = false) => {
     linkedFillsRows.value = _linkedDataArr(fRes, fj)
     linkedBillsRows.value = _linkedDataArr(bRes, bj)
     linkedPosRows.value = _linkedDataArr(pRes, pj)
+    if (pRes.ok) {
+      linkedOkxFetchedAt.value = new Date().toISOString()
+    }
     if (!silent) {
       if (!fRes.ok) linkedOkxErr.value = _linkedErrText(fRes, fj)
       else if (!bRes.ok) linkedOkxErr.value = _linkedErrText(bRes, bj)
@@ -247,6 +267,7 @@ const loadLinkedOkxTradeData = async (silent = false) => {
     linkedFillsRows.value = []
     linkedBillsRows.value = []
     linkedPosRows.value = []
+    linkedOkxFetchedAt.value = null
   }
 }
 
@@ -591,6 +612,20 @@ const snapshotRoiDisplay = (p: PositionSnapshotRow): string => {
   const api = formatApiUplRatio(p.upl_ratio)
   if (api) return api
   return formatRoiPct(p.avg_px, p.last_px, p.pos_side)
+}
+
+const linkedPosRoiDisplay = (r: Record<string, unknown>): string => {
+  const ur = pickLinkedStr(r, ['uplRatio'])
+  const api = formatApiUplRatio(ur === '—' ? undefined : ur)
+  if (api) return api
+  const avg = pickLinkedStr(r, ['avgPx'])
+  const mark = pickLinkedStr(r, ['markPx', 'last'])
+  const side = pickLinkedStr(r, ['posSide'])
+  return formatRoiPct(
+    avg === '—' ? null : avg,
+    mark === '—' ? null : mark,
+    side === '—' ? null : side,
+  )
 }
 
 const eventRoiDisplay = (e: PositionEventRow): string => {
@@ -1118,6 +1153,43 @@ const snapshotRowsDecorated = computed(() =>
     }),
 )
 
+const linkedMarginCell = (r: Record<string, unknown>): string => {
+  const m = pickLinkedStr(r, ['margin'])
+  if (m !== '—') return formatMarginWithU(m)
+  const im = pickLinkedStr(r, ['imr'])
+  return formatMarginWithU(im === '—' ? undefined : im)
+}
+
+/** 跟单持仓（欧易 positions）：列与对方持仓对齐，排序规则与快照一致 */
+const linkedPosRowsDecorated = computed(() =>
+  [...linkedPosRows.value]
+    .sort((a, b) => {
+      const ca = instIdBaseCcy(pickLinkedStr(a, ['instId']))
+      const cb = instIdBaseCcy(pickLinkedStr(b, ['instId']))
+      const c = comparePosCcy(ca === '—' ? '' : ca, cb === '—' ? '' : cb)
+      if (c !== 0) return c
+      return pickLinkedStr(a, ['posId']).localeCompare(pickLinkedStr(b, ['posId']), 'en', {
+        sensitivity: 'base',
+      })
+    })
+    .map((r) => {
+      const avg = pickLinkedStr(r, ['avgPx'])
+      const mark = pickLinkedStr(r, ['markPx', 'last'])
+      const side = pickLinkedStr(r, ['posSide'])
+      const tone = pnlToneFromAvgMark(
+        avg === '—' ? null : avg,
+        mark === '—' ? null : mark,
+        side === '—' ? null : side,
+      )
+      return {
+        r,
+        tone,
+        rowClass: rowClassFromPnlTone(tone),
+        badgeClass: badgeClassFromPnlTone(tone),
+      }
+    }),
+)
+
 /** 跟单记录：当前页内按币种排序（与持仓一致） */
 /** 仅模拟模式允许删库里的 follow_sim_records；与后端 DELETE 条件一致（看已保存的 live_trading_enabled）。 */
 const canDeleteSimRecords = computed(
@@ -1127,7 +1199,7 @@ const simRecordDeletingId = ref<number | null>(null)
 
 const deleteSimRecord = async (r: FollowSimRecordRow) => {
   if (!canDeleteSimRecords.value) return
-  if (!window.confirm(`确定删除该条模拟记录（订单编号 ${r.pos_id}）？`)) return
+  if (!window.confirm(`确定删除该条模拟记录（持仓编号 ${r.pos_id}）？`)) return
   const un = paramUniqueName.value
   if (!un) return
   simRecordDeletingId.value = r.id
@@ -1221,7 +1293,7 @@ const eventPnlTone = (e: PositionEventRow): PnlTone => {
               >
                 <thead class="table-light">
                   <tr>
-                    <th>订单编号</th>
+                    <th>持仓编号</th>
                     <th>币种</th>
                     <th>方向</th>
                     <th>杠杆</th>
@@ -1289,36 +1361,60 @@ const eventPnlTone = (e: PositionEventRow): PnlTone => {
                   <thead class="table-light">
                     <tr>
                       <th>持仓编号</th>
-                      <th>合约</th>
+                      <th>币种</th>
                       <th>方向</th>
                       <th>杠杆</th>
+                      <th>收益额</th>
+                      <th>收益率</th>
                       <th>持仓量</th>
                       <th>保证金</th>
                       <th>维持保证金率</th>
                       <th>开仓均价</th>
-                      <th>标记价</th>
-                      <th>未实现盈亏</th>
+                      <th>标记价格</th>
                       <th>预估强平价</th>
+                      <th>开仓时间</th>
+                      <th>更新时间</th>
                     </tr>
                   </thead>
                   <tbody>
                     <tr
-                      v-for="(r, i) in linkedPosRows"
-                      :key="'mypos-' + i + '-' + pickLinkedStr(r, ['posId', 'instId'])"
+                      v-for="(row, i) in linkedPosRowsDecorated"
+                      :key="'mypos-' + i + '-' + pickLinkedStr(row.r, ['posId', 'instId'])"
+                      :class="row.rowClass"
                     >
-                      <td class="mono sm td-pos-id">{{ pickLinkedStr(r, ['posId']) }}</td>
-                      <td class="mono sm">{{ pickLinkedStr(r, ['instId']) }}</td>
-                      <td>{{ pickLinkedStr(r, ['posSide']) }}</td>
-                      <td class="mono sm">{{ pickLinkedStr(r, ['lever']) }}</td>
-                      <td class="mono sm">{{ pickLinkedStr(r, ['pos']) }}</td>
-                      <td class="mono sm">{{ pickLinkedStr(r, ['margin', 'imr']) }}</td>
-                      <td class="mono sm">{{ pickLinkedStr(r, ['mgnRatio']) }}</td>
-                      <td class="mono sm">{{ pickLinkedStr(r, ['avgPx']) }}</td>
-                      <td class="mono sm mark-col">{{ pickLinkedStr(r, ['markPx', 'last']) }}</td>
-                      <td class="mono sm" :class="uplCellClass(pickLinkedStr(r, ['upl']))">
-                        {{ formatUplUsdt(pickLinkedStr(r, ['upl'])) }}
+                      <td class="mono td-pos-id">
+                        <span v-if="row.tone !== 'neutral'" :class="row.badgeClass">{{
+                          pickLinkedStr(row.r, ['posId'])
+                        }}</span>
+                        <template v-else>{{ pickLinkedStr(row.r, ['posId']) }}</template>
                       </td>
-                      <td class="mono sm">{{ pickLinkedStr(r, ['liqPx']) }}</td>
+                      <td>{{ instIdBaseCcy(pickLinkedStr(row.r, ['instId'])) }}</td>
+                      <td>{{ formatPosSide(pickLinkedStr(row.r, ['posSide'])) }}</td>
+                      <td>{{ formatLever(pickLinkedStr(row.r, ['lever'])) }}</td>
+                      <td :class="uplCellClass(pickLinkedStr(row.r, ['upl']))">{{
+                        formatUplUsdt(pickLinkedStr(row.r, ['upl']))
+                      }}</td>
+                      <td :class="roiClassFromTone(row.tone)">{{ linkedPosRoiDisplay(row.r) }}</td>
+                      <td class="mono sm">{{
+                        formatPosContractsDisplay(
+                          pickLinkedStr(row.r, ['pos']) === '—'
+                            ? undefined
+                            : pickLinkedStr(row.r, ['pos']),
+                        )
+                      }}</td>
+                      <td class="mono sm">{{ linkedMarginCell(row.r) }}</td>
+                      <td class="mono sm">{{
+                        formatMaintMarginRatioPct(pickLinkedStr(row.r, ['mgnRatio']))
+                      }}</td>
+                      <td class="mono sm">{{ formatAvgPx(pickLinkedStr(row.r, ['avgPx'])) }}</td>
+                      <td class="mono sm mark-col">{{
+                        pickLinkedStr(row.r, ['markPx', 'last'])
+                      }}</td>
+                      <td class="mono sm">{{ simRecordExtraText(pickLinkedStr(row.r, ['liqPx'])) || '—' }}</td>
+                      <td class="nowrap sm">{{ linkedOpenTimeDisplay(row.r) }}</td>
+                      <td class="nowrap sm">{{
+                        linkedOkxFetchedAt ? formatTime(linkedOkxFetchedAt) : '—'
+                      }}</td>
                     </tr>
                   </tbody>
                 </table>
@@ -1380,7 +1476,7 @@ const eventPnlTone = (e: PositionEventRow): PnlTone => {
               >
                 <thead class="table-light">
                   <tr>
-                    <th>订单编号</th>
+                    <th>持仓编号</th>
                     <th>币种</th>
                     <th>方向</th>
                     <th>杠杆</th>
@@ -1486,7 +1582,7 @@ const eventPnlTone = (e: PositionEventRow): PnlTone => {
               >
                 <thead class="table-light">
                   <tr>
-                    <th>订单编号</th>
+                    <th>持仓编号</th>
                     <th>币种</th>
                     <th>方向</th>
                     <th>杠杆</th>
