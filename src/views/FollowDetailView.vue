@@ -975,6 +975,40 @@ const saveOkxBind = async () => {
   }
 }
 
+/** 解除 OKX 绑定；与后端一致：跟单启用中不可解绑。 */
+const clearOkxBind = async () => {
+  const c = current.value
+  if (!c || c.enabled || c.okx_api_account_id == null) return
+  okxBindSaving.value = true
+  okxBindMsg.value = ''
+  try {
+    const res = await fetch(`${API_BASE}/follow-accounts/${c.id}/okx-bind`, {
+      method: 'PATCH',
+      headers: authHeaders(),
+      body: JSON.stringify({ okx_api_account_id: null }),
+    })
+    const data = (await res.json().catch(() => ({}))) as FollowRow & { detail?: string }
+    if (!res.ok) {
+      okxBindMsg.value =
+        typeof data.detail === 'string' ? data.detail : `解除失败 (${res.status})`
+      return
+    }
+    okxBindMsg.value = '已取消绑定'
+    await loadList(true)
+    await loadOkxApiList(true)
+    const row = accounts.value.find((a) => a.id === c.id)
+    if (row) {
+      row.okx_api_account_id = data.okx_api_account_id ?? null
+      okxBindSelect.value = ''
+    }
+    void loadLinkedOkxTradeData(false)
+  } catch (e: unknown) {
+    okxBindMsg.value = e instanceof Error ? e.message : '网络错误'
+  } finally {
+    okxBindSaving.value = false
+  }
+}
+
 /** USDT 类金额：固定 3 位小数 */
 const formatUsdt3 = (raw: string | number | null | undefined): string => {
   if (raw === null || raw === undefined || raw === '') return '—'
@@ -1895,7 +1929,7 @@ const eventPnlTone = (e: PositionEventRow): PnlTone => {
                         {{ okxOptionLabel(o) }}
                       </option>
                     </select>
-                    <div class="mt-2">
+                    <div class="mt-2 d-flex flex-wrap align-items-center gap-2">
                       <button
                         type="button"
                         class="btn btn-sm btn-primary"
@@ -1903,6 +1937,20 @@ const eventPnlTone = (e: PositionEventRow): PnlTone => {
                         @click="saveOkxBind"
                       >
                         {{ okxBindSaving ? '保存中…' : '保存绑定' }}
+                      </button>
+                      <button
+                        v-if="current.okx_api_account_id != null"
+                        type="button"
+                        class="btn btn-sm btn-outline-danger"
+                        :disabled="current.enabled || okxBindSaving"
+                        :title="
+                          current.enabled
+                            ? '跟单启用中不可解绑，请先停用跟单'
+                            : '解除与本交易员的 API 绑定'
+                        "
+                        @click="clearOkxBind"
+                      >
+                        取消绑定
                       </button>
                     </div>
                     <span
