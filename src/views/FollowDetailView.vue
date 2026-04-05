@@ -277,7 +277,7 @@ const loadLinkedOkxTradeData = async (silent = false) => {
 
 /** 悬停「跟单配置」标题时展示（不含已固定的按成本模式文案） */
 const followConfigSectionHint =
-  '本页保存的每条跟单记录独立生效。后台对每个勾选「启动追加」的跟单帐户单独协程，约每 1 秒拉取该帐户绑定 OKX 的永续持仓；当维持保证金率（mgnRatio）低于 200% 时，按「下注金额 × 追加比例」自动追加逐仓保证金；「追加次数上限」仅在低于 200% 的持续期间计数，mgnRatio 回到 ≥200% 后清零。须同时勾选「启用真实交易」「启动追加」并绑定 API。关闭真实交易时不调欧易私有接口。可选 OKX_FOLLOW_REST_BASE、OKX_FOLLOW_USE_PAPER。'
+  '本页保存的每条跟单记录独立生效。后台对每个勾选「启动追加」的跟单帐户单独协程，约每 1 秒拉取该帐户绑定 OKX 的永续持仓；当维持保证金率（mgnRatio）≤ 200% 时，按「下注金额 × 追加比例」自动追加逐仓保证金；「追加次数上限」仅在 ≤200% 的持续期间计数，mgnRatio 回到 &gt;200% 后清零。须同时勾选「启用真实交易」「启动追加」并绑定 API。关闭真实交易时不调欧易私有接口。可选 OKX_FOLLOW_REST_BASE、OKX_FOLLOW_USE_PAPER。'
 
 /** 悬停「跟单仓位数」时展示 */
 const maxFollowPositionsLabelHint =
@@ -2161,7 +2161,7 @@ const eventPnlTone = (e: PositionEventRow): PnlTone => {
                     />
                   </div>
                   <p class="small text-muted mb-2">
-                    维持保证金率 &lt; 200% 时自动追加，金额 = 下注金额 × 追加比例；每条跟单约每 1 秒独立轮询绑定
+                    维持保证金率 ≤ 200% 时自动追加，金额 = 下注金额 × 追加比例；每条跟单约每 1 秒独立轮询绑定
                     OKX，与「启动追加」「真实交易」「绑定 API」联动。
                   </p>
                   <div class="form-check mb-3">
