@@ -16,6 +16,7 @@ type FollowRow = {
   last_enabled_at: string | null
   created_at: string
   positions_refreshed_at: string | null
+  okx_api_account_id?: number | null
 }
 
 const inputLinks = ref('')
@@ -206,6 +207,7 @@ const onEnabledChange = async (row: FollowRow, ev: Event) => {
     row.enabled = data.enabled
     row.last_enabled_at = data.last_enabled_at
     row.positions_refreshed_at = data.positions_refreshed_at ?? null
+    row.okx_api_account_id = data.okx_api_account_id ?? null
   } catch (e: unknown) {
     addError.value = e instanceof Error ? e.message : '网络错误'
     el.checked = !enabled
@@ -241,7 +243,8 @@ const deleteAccount = async (row: FollowRow) => {
 <template>
   <div class="page">
     <div class="header">
-      <RouterLink class="nav-extra" to="/contract-trade">合约交易 / 保证金</RouterLink>
+      <RouterLink class="nav-extra" to="/okx-api-accounts">OKX API 帐户</RouterLink>
+      <RouterLink class="nav-extra nav-contract" to="/contract-trade">合约交易 / 保证金</RouterLink>
       <h1 class="title">跟单帐户</h1>
       <p class="desc">粘贴跟单落地页链接（每行一个），保存后会解析昵称与 uniqueName。列表按「启用优先 → 最近一次启用时间」排序。</p>
     </div>
@@ -301,6 +304,7 @@ const deleteAccount = async (row: FollowRow) => {
             <th>最近一次启用时间</th>
             <th>持仓快照更新时间</th>
             <th>添加时间</th>
+            <th class="td-okx">OKX API</th>
             <th class="td-actions">操作</th>
           </tr>
         </thead>
@@ -327,6 +331,7 @@ const deleteAccount = async (row: FollowRow) => {
             <td class="td-time">{{ formatTime(a.last_enabled_at) }}</td>
             <td class="td-time">{{ formatTime(a.positions_refreshed_at) }}</td>
             <td class="td-time">{{ formatTime(a.created_at) }}</td>
+            <td class="td-okx mono sm">{{ a.okx_api_account_id != null ? '#' + a.okx_api_account_id : '—' }}</td>
             <td class="td-actions">
               <div class="action-btns">
                 <button
@@ -379,6 +384,10 @@ const deleteAccount = async (row: FollowRow) => {
 .nav-extra:hover {
   opacity: 1;
   text-decoration: underline;
+}
+
+.nav-contract {
+  margin-left: 4px;
 }
 
 .title {
@@ -510,6 +519,14 @@ const deleteAccount = async (row: FollowRow) => {
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono',
     'Courier New', monospace;
   font-size: 12px;
+}
+
+.sm {
+  font-size: 12px;
+}
+
+.td-okx {
+  white-space: nowrap;
 }
 
 .td-check {

@@ -29,6 +29,11 @@ const router = createRouter({
       name: 'contractTrade',
       component: () => import('../views/ContractTradeView.vue'),
     },
+    {
+      path: '/okx-api-accounts',
+      name: 'okxApiAccounts',
+      component: () => import('../views/OkxApiAccountsView.vue'),
+    },
   ],
 })
 

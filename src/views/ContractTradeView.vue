@@ -20,7 +20,6 @@ const contractSymbol = ref('')
 const contractPrincipalUsdt = ref('')
 /** 做多 / 做空意图 */
 const contractDirection = ref<'long' | 'short'>('long')
-const contractTdMode = ref<'isolated' | 'cross'>('isolated')
 /** 杠杆倍数 */
 const contractLever = ref('')
 const contractSubmitting = ref(false)
@@ -39,6 +38,23 @@ const fillsRows = ref<Record<string, unknown>[]>([])
 const billsLoading = ref(false)
 const billsError = ref('')
 const billsRows = ref<Record<string, unknown>[]>([])
+
+type OkxPick = { id: number; okx_follow_api_label: string | null; remark: string | null }
+const okxList = ref<OkxPick[]>([])
+/** 选中的 okx_api_accounts.id，空字符串表示未选 */
+const okxSel = ref('')
+const okxListLoading = ref(false)
+const okxListErr = ref('')
+
+const selectedOkxId = (): number | null => {
+  const n = Number.parseInt(okxSel.value, 10)
+  return Number.isFinite(n) && n > 0 ? n : null
+}
+
+const okxIdParam = (): string => {
+  const id = selectedOkxId()
+  return id != null ? `okx_api_account_id=${id}` : ''
+}
 
 const formatTs = (ms: string | number | undefined) => {
   if (ms === undefined || ms === '') return '—'
@@ -59,11 +75,43 @@ const pickStr = (row: Record<string, unknown>, keys: string[]) => {
 const trimStr = (v: unknown): string =>
   v === null || v === undefined ? '' : String(v).trim()
 
+const loadOkxList = async () => {
+  okxListLoading.value = true
+  okxListErr.value = ''
+  try {
+    const res = await fetch(`${API_BASE}/okx-api-accounts?limit=200&offset=0`, {
+      headers: authHeaders(),
+    })
+    if (!res.ok) {
+      okxListErr.value = (await res.json().catch(() => ({}))).detail || '加载 API 列表失败'
+      okxList.value = []
+      return
+    }
+    const data = (await res.json()) as OkxPick[]
+    okxList.value = Array.isArray(data) ? data : []
+    if (!okxSel.value && okxList.value.length === 1) {
+      okxSel.value = String(okxList.value[0].id)
+    }
+  } catch (e: unknown) {
+    okxListErr.value = e instanceof Error ? e.message : '网络错误'
+    okxList.value = []
+  } finally {
+    okxListLoading.value = false
+  }
+}
+
 const loadFills = async () => {
   fillsLoading.value = true
   fillsError.value = ''
+  const q = okxIdParam()
+  if (!q) {
+    fillsError.value = '请先选择 OKX API 帐户'
+    fillsLoading.value = false
+    fillsRows.value = []
+    return
+  }
   try {
-    const res = await fetch(`${API_BASE}/manual-okx/fills?instType=SWAP&limit=50`, {
+    const res = await fetch(`${API_BASE}/manual-okx/fills?${q}&instType=SWAP&limit=50`, {
       headers: authHeaders(),
     })
     const body = (await res.json()) as OkxEnvelope & Record<string, unknown>
@@ -86,8 +134,15 @@ const loadFills = async () => {
 const loadMarginBills = async () => {
   billsLoading.value = true
   billsError.value = ''
+  const q = okxIdParam()
+  if (!q) {
+    billsError.value = '请先选择 OKX API 帐户'
+    billsLoading.value = false
+    billsRows.value = []
+    return
+  }
   try {
-    const res = await fetch(`${API_BASE}/manual-okx/margin-bills?instType=SWAP&limit=100`, {
+    const res = await fetch(`${API_BASE}/manual-okx/margin-bills?${q}&instType=SWAP&limit=100`, {
       headers: authHeaders(),
     })
     const body = (await res.json()) as OkxEnvelope & Record<string, unknown>
@@ -109,13 +164,18 @@ const loadMarginBills = async () => {
 
 const submitContract = async () => {
   contractMsg.value = ''
+  const oid = selectedOkxId()
+  if (oid == null) {
+    contractMsg.value = '请先选择 OKX API 帐户'
+    return
+  }
   contractSubmitting.value = true
   try {
-    const payload: Record<string, string> = {
+    const payload: Record<string, string | number> = {
+      okx_api_account_id: oid,
       symbol: contractSymbol.value.trim(),
       principal_usdt: trimStr(contractPrincipalUsdt.value),
       direction: contractDirection.value,
-      td_mode: contractTdMode.value,
     }
     const lv = trimStr(contractLever.value)
     if (lv) payload.lever = lv
@@ -142,12 +202,18 @@ const submitContract = async () => {
 
 const submitMargin = async () => {
   marginMsg.value = ''
+  const oid = selectedOkxId()
+  if (oid == null) {
+    marginMsg.value = '请先选择 OKX API 帐户'
+    return
+  }
   marginSubmitting.value = true
   try {
     const res = await fetch(`${API_BASE}/manual-okx/margin-add`, {
       method: 'POST',
       headers: authHeaders(),
       body: JSON.stringify({
+        okx_api_account_id: oid,
         inst_id: marginInstId.value.trim(),
         pos_side: marginPosSide.value,
         amt: marginAmt.value.trim(),
@@ -168,9 +234,16 @@ const submitMargin = async () => {
   }
 }
 
-onMounted(() => {
+const onOkxChange = () => {
   void loadFills()
   void loadMarginBills()
+}
+
+onMounted(() => {
+  void loadOkxList().then(() => {
+    void loadFills()
+    void loadMarginBills()
+  })
 })
 </script>
 
@@ -180,9 +253,30 @@ onMounted(() => {
       <RouterLink class="back" to="/">← 跟单帐户</RouterLink>
       <h1 class="title">合约交易与保证金</h1>
       <p class="desc">
-        合约开仓固定为双向（long/short）；请确保欧易合约为开平仓模式。币种只填如 DOGE 即自动 USDT 永续。成交与保证金流水来自交易所，本系统不入库。
+        合约开仓固定为双向（long/short）、保证金模式固定逐仓（isolated）；请确保欧易合约为开平仓模式。币种只填如 DOGE 即自动 USDT
+        永续。成交与保证金流水来自交易所，本系统不入库。私有接口使用「OKX API
+        帐户」页录入并保存在数据库的密钥，不再读取 .env 中的 API Key。
       </p>
     </div>
+
+    <section class="card">
+      <div class="card-title">使用的 OKX API 帐户</div>
+      <p v-if="okxListLoading" class="muted mb-0">加载列表中…</p>
+      <p v-else-if="okxListErr" class="err-text mb-0">{{ okxListErr }}</p>
+      <template v-else>
+        <label class="field mb-0">
+          <span class="lab">选择帐户（密钥来自数据库）</span>
+          <select v-model="okxSel" class="inp" @change="onOkxChange">
+            <option value="">— 请选择 —</option>
+            <option v-for="o in okxList" :key="o.id" :value="String(o.id)">
+              #{{ o.id }}
+              {{ o.okx_follow_api_label ? ` · ${o.okx_follow_api_label}` : '' }}
+              {{ o.remark ? ` · ${o.remark}` : '' }}
+            </option>
+          </select>
+        </label>
+      </template>
+    </section>
 
     <section class="card">
       <div class="card-title">合约交易（市价开仓）</div>
@@ -229,13 +323,10 @@ onMounted(() => {
             <label><input v-model="contractDirection" type="radio" value="short" /> 做空</label>
           </div>
         </div>
-        <label class="field">
+        <div class="field">
           <span class="lab">保证金模式</span>
-          <select v-model="contractTdMode" class="inp">
-            <option value="isolated">逐仓 isolated</option>
-            <option value="cross">全仓 cross</option>
-          </select>
-        </label>
+          <p class="field-hint mb-0">固定为逐仓（isolated），与自动跟单一致。</p>
+        </div>
       </div>
       <button
         type="button"
@@ -510,6 +601,11 @@ onMounted(() => {
 
 .muted {
   opacity: 0.7;
+  font-size: 14px;
+}
+
+.err-text {
+  color: #b00020;
   font-size: 14px;
 }
 

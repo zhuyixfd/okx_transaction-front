@@ -20,6 +20,16 @@ type FollowRow = {
   margin_add_ratio_of_bet?: number | string | null
   margin_auto_enabled?: boolean
   margin_add_max_times?: number | null
+  okx_api_account_id?: number | null
+  live_trading_enabled?: boolean
+}
+
+type OkxApiListRow = {
+  id: number
+  okx_follow_api_label: string | null
+  remark: string | null
+  bound_follow_account_id: number | null
+  bound_trader_label: string | null
 }
 
 type FollowCfgForm = {
@@ -27,8 +37,10 @@ type FollowCfgForm = {
   max_follow_positions: number | null
   margin_add_ratio_of_bet: number
   margin_auto_enabled: boolean
-  /** 保证金自动追加次数上限；null 表示不限制 */
+  /** 追加次数上限；null 表示不限制 */
   margin_add_max_times: number | null
+  /** true：真实交易（欧易私有接口）；false：仅模拟 */
+  live_trading_enabled: boolean
 }
 
 type PositionEventRow = {
@@ -147,17 +159,102 @@ const followCfg = ref<FollowCfgForm>({
   margin_add_ratio_of_bet: 0.2,
   margin_auto_enabled: false,
   margin_add_max_times: null,
+  live_trading_enabled: false,
 })
 const configSaving = ref(false)
 const configMsg = ref('')
 const enabledToggling = ref(false)
 const enabledToggleMsg = ref('')
 
+const okxApiList = ref<OkxApiListRow[]>([])
+const okxBindSelect = ref('')
+const okxBindMsg = ref('')
+const okxBindSaving = ref(false)
+
+/** 绑定 OKX 下本人帐户：成交 / 保证金流水 / 持仓（follow_order 代理接口） */
+const linkedFillsRows = ref<Record<string, unknown>[]>([])
+const linkedBillsRows = ref<Record<string, unknown>[]>([])
+const linkedPosRows = ref<Record<string, unknown>[]>([])
+const linkedOkxErr = ref('')
+
+const pickLinkedStr = (row: Record<string, unknown>, keys: string[]) => {
+  for (const k of keys) {
+    const v = row[k]
+    if (v !== undefined && v !== null && String(v) !== '') return String(v)
+  }
+  return '—'
+}
+
+const formatLinkedTs = (raw: string | number | undefined) => {
+  if (raw === undefined || raw === '' || raw === '—') return '—'
+  const n = typeof raw === 'number' ? raw : Number(String(raw).trim())
+  if (!Number.isFinite(n)) return String(raw)
+  return new Date(n).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' })
+}
+
+const _linkedErrText = (res: Response, j: unknown): string => {
+  const d = (j as { detail?: unknown })?.detail
+  if (typeof d === 'string') return d
+  if (d != null) return JSON.stringify(d)
+  return `请求失败 (${res.status})`
+}
+
+const _linkedDataArr = (res: Response, j: unknown): Record<string, unknown>[] => {
+  if (!res.ok) return []
+  const data = (j as { data?: unknown }).data
+  return Array.isArray(data) ? (data as Record<string, unknown>[]) : []
+}
+
+const loadLinkedOkxTradeData = async (silent = false) => {
+  const un = paramUniqueName.value
+  const c = current.value
+  if (!un || !c?.okx_api_account_id) {
+    linkedFillsRows.value = []
+    linkedBillsRows.value = []
+    linkedPosRows.value = []
+    if (!silent) linkedOkxErr.value = ''
+    return
+  }
+  if (!silent) linkedOkxErr.value = ''
+  const q = new URLSearchParams({ unique_name: un })
+  try {
+    const [fRes, bRes, pRes] = await Promise.all([
+      fetch(`${API_BASE}/follow-accounts/linked-okx/fills?${q}&instType=SWAP&limit=30`, {
+        headers: authHeaders(),
+      }),
+      fetch(`${API_BASE}/follow-accounts/linked-okx/margin-bills?${q}&instType=SWAP&limit=50`, {
+        headers: authHeaders(),
+      }),
+      fetch(`${API_BASE}/follow-accounts/linked-okx/positions?${q}&instType=SWAP`, {
+        headers: authHeaders(),
+      }),
+    ])
+    const [fj, bj, pj] = await Promise.all([
+      fRes.json().catch(() => ({})),
+      bRes.json().catch(() => ({})),
+      pRes.json().catch(() => ({})),
+    ])
+    linkedFillsRows.value = _linkedDataArr(fRes, fj)
+    linkedBillsRows.value = _linkedDataArr(bRes, bj)
+    linkedPosRows.value = _linkedDataArr(pRes, pj)
+    if (!silent) {
+      if (!fRes.ok) linkedOkxErr.value = _linkedErrText(fRes, fj)
+      else if (!bRes.ok) linkedOkxErr.value = _linkedErrText(bRes, bj)
+      else if (!pRes.ok) linkedOkxErr.value = _linkedErrText(pRes, pj)
+    }
+  } catch (e: unknown) {
+    if (!silent) linkedOkxErr.value = e instanceof Error ? e.message : '网络错误'
+    linkedFillsRows.value = []
+    linkedBillsRows.value = []
+    linkedPosRows.value = []
+  }
+}
+
 /** 悬停「跟单配置」标题时展示（不含已固定的按成本模式文案） */
 const followConfigSectionHint =
-  '自动加保证金需在服务器环境配置 OKX API（OKX_FOLLOW_API_KEY / OKX_FOLLOW_SECRET_KEY / OKX_FOLLOW_PASSPHRASE），并在下方填写「每个仓位下注金额」且勾选启用；后台将监控本人永续持仓保证金率，当 ≤ 内置阈值（200%）时按「下注金额 × 追加比例」追加逐仓保证金（多帐户启用时取下注金额与追加比例的保守最小值）。'
+  '本页保存的每条跟单记录独立生效。后台对每个勾选「启动追加」的跟单帐户单独协程，约每 1 秒拉取该帐户绑定 OKX 的永续持仓；当维持保证金率（mgnRatio）低于 200% 时，按「下注金额 × 追加比例」自动追加逐仓保证金；「追加次数上限」仅在低于 200% 的持续期间计数，mgnRatio 回到 ≥200% 后清零。须同时勾选「启用真实交易」「启动追加」并绑定 API。关闭真实交易时不调欧易私有接口。可选 OKX_FOLLOW_REST_BASE、OKX_FOLLOW_USE_PAPER。'
 
-/** 悬停「最多同时跟几个仓位（n）」时展示 */
+/** 悬停「跟单仓位数」时展示 */
 const maxFollowPositionsLabelHint =
   '对方持仓少于 n 则全跟；多于 n 则只跟 n 个；对方平仓换仓后仍只保持最多 n 个跟单仓位。'
 
@@ -167,7 +264,7 @@ const snapshotSectionHint =
 
 /** 悬停「跟单记录（模拟）」标题 */
 const simRecordsSectionHint =
-  '按「每个仓位下注金额」模拟资金变动；开仓写入记录，平仓结算已实现盈亏。未平仓行随标记价更新浮动盈亏。总收益 = 已实现合计 + 未平仓浮动合计（随行情变动）。'
+  '按「下注金额」模拟资金变动；开仓写入记录，平仓结算已实现盈亏。未平仓行随标记价更新浮动盈亏。总收益 = 已实现合计 + 未平仓浮动合计（随行情变动）。'
 
 /** 悬停「开仓 / 平仓记录」标题 */
 const eventsSectionHint =
@@ -362,17 +459,38 @@ const loadSimRecords = async (silent = false) => {
   }
 }
 
+const loadOkxApiList = async (silent = false) => {
+  if (!silent) okxBindMsg.value = ''
+  try {
+    const res = await fetch(`${API_BASE}/okx-api-accounts?limit=200&offset=0`, {
+      headers: authHeaders(),
+    })
+    if (!res.ok) {
+      if (!silent) okxBindMsg.value = (await res.json().catch(() => ({}))).detail || '加载 API 列表失败'
+      return
+    }
+    const data = (await res.json()) as OkxApiListRow[]
+    okxApiList.value = Array.isArray(data) ? data : []
+  } catch {
+    if (!silent) okxBindMsg.value = '加载 API 列表网络错误'
+  }
+}
+
 onMounted(() => {
+  void loadOkxApiList(false)
   void loadList(false).then(() => {
     void loadEvents(false)
     void loadSnapshot(false)
     void loadSimRecords(false)
+    void loadLinkedOkxTradeData(false)
   })
   pollTimer = setInterval(() => {
     void loadEvents(true)
     void loadSnapshot(true)
     void loadSimRecords(true)
     void loadList(true)
+    void loadOkxApiList(true)
+    void loadLinkedOkxTradeData(true)
   }, 2000)
 })
 
@@ -389,6 +507,7 @@ watch(paramUniqueName, () => {
   void loadEvents(false)
   void loadSnapshot(false)
   void loadSimRecords(false)
+  void loadLinkedOkxTradeData(false)
 })
 
 const eventsTotalPages = computed(() =>
@@ -589,6 +708,7 @@ const syncFollowCfgFromCurrent = () => {
     margin_add_ratio_of_bet: parseNum(c.margin_add_ratio_of_bet) ?? 0.2,
     margin_auto_enabled: Boolean(c.margin_auto_enabled),
     margin_add_max_times: parseNum(c.margin_add_max_times),
+    live_trading_enabled: Boolean(c.live_trading_enabled),
   }
 }
 
@@ -602,6 +722,20 @@ watch(
     if (id == null) return
     if (prevId !== undefined && id === prevId) return
     syncFollowCfgFromCurrent()
+  },
+  { immediate: true },
+)
+
+watch(
+  () => current.value?.id,
+  (id, prevId) => {
+    const c = current.value
+    if (c == null) {
+      okxBindSelect.value = ''
+      return
+    }
+    if (prevId !== undefined && id === prevId) return
+    okxBindSelect.value = c.okx_api_account_id != null ? String(c.okx_api_account_id) : ''
   },
   { immediate: true },
 )
@@ -632,6 +766,7 @@ const saveFollowConfig = async () => {
         margin_add_ratio_of_bet: followCfg.value.margin_add_ratio_of_bet,
         margin_auto_enabled: followCfg.value.margin_auto_enabled,
         margin_add_max_times: followCfg.value.margin_add_max_times,
+        live_trading_enabled: followCfg.value.live_trading_enabled,
       }),
     })
     const data = (await res.json().catch(() => ({}))) as { detail?: string }
@@ -672,11 +807,72 @@ const onEnabledChange = async (ev: Event) => {
     c.enabled = data.enabled
     c.last_enabled_at = data.last_enabled_at
     c.positions_refreshed_at = data.positions_refreshed_at ?? null
+    c.okx_api_account_id = data.okx_api_account_id ?? null
+    okxBindSelect.value = c.okx_api_account_id != null ? String(c.okx_api_account_id) : ''
   } catch (e: unknown) {
     enabledToggleMsg.value = e instanceof Error ? e.message : '网络错误'
     el.checked = !enabled
   } finally {
     enabledToggling.value = false
+  }
+}
+
+const isOkxOptionDisabled = (o: OkxApiListRow): boolean => {
+  const c = current.value
+  if (!c) return true
+  if (o.bound_follow_account_id == null) return false
+  return o.bound_follow_account_id !== c.id
+}
+
+const okxOptionLabel = (o: OkxApiListRow): string => {
+  const label = o.okx_follow_api_label?.trim() || '无标签'
+  const rm = o.remark?.trim()
+  const base = `#${o.id} · ${label}${rm ? ` · ${rm}` : ''}`
+  if (o.bound_follow_account_id != null && current.value && o.bound_follow_account_id !== current.value.id) {
+    return `${base}（已绑定其他交易员）`
+  }
+  return base
+}
+
+const saveOkxBind = async () => {
+  const c = current.value
+  if (!c || c.enabled) return
+  okxBindSaving.value = true
+  okxBindMsg.value = ''
+  const raw = okxBindSelect.value.trim()
+  let newId: number | null = null
+  if (raw !== '') {
+    const n = Number.parseInt(raw, 10)
+    if (!Number.isFinite(n)) {
+      okxBindMsg.value = '请选择有效的 API 帐户'
+      okxBindSaving.value = false
+      return
+    }
+    newId = n
+  }
+  try {
+    const res = await fetch(`${API_BASE}/follow-accounts/${c.id}/okx-bind`, {
+      method: 'PATCH',
+      headers: authHeaders(),
+      body: JSON.stringify({ okx_api_account_id: newId }),
+    })
+    const data = (await res.json().catch(() => ({}))) as FollowRow & { detail?: string }
+    if (!res.ok) {
+      okxBindMsg.value = data.detail || `保存失败 (${res.status})`
+      return
+    }
+    okxBindMsg.value = '绑定已保存'
+    await loadList(true)
+    await loadOkxApiList(true)
+    const row = accounts.value.find((a) => a.id === c.id)
+    if (row) {
+      row.okx_api_account_id = data.okx_api_account_id ?? null
+      okxBindSelect.value = row.okx_api_account_id != null ? String(row.okx_api_account_id) : ''
+    }
+  } catch (e: unknown) {
+    okxBindMsg.value = e instanceof Error ? e.message : '网络错误'
+  } finally {
+    okxBindSaving.value = false
   }
 }
 
@@ -939,6 +1135,7 @@ const eventPnlTone = (e: PositionEventRow): PnlTone => {
     <aside class="detail-aside">
       <div class="aside-head">
         <RouterLink class="back-home" to="/">← 跟单帐户</RouterLink>
+        <RouterLink class="back-home aside-okx-link" to="/okx-api-accounts">OKX API 帐户</RouterLink>
         <div class="aside-title">已添加用户</div>
       </div>
       <div v-if="loading" class="aside-empty">加载中…</div>
@@ -979,9 +1176,6 @@ const eventPnlTone = (e: PositionEventRow): PnlTone => {
           <div v-if="snapshotLoading && !snapshot" class="muted">加载快照中…</div>
           <div v-else-if="snapshotError" class="aside-err">{{ snapshotError }}</div>
           <template v-else-if="snapshot">
-            <div v-if="snapshot.positions.length === 0" class="muted subsection-gap">
-              当前无持仓或未建立快照（启用后等待下一轮轮询）。
-            </div>
             <div class="detail-table-rounded subsection-gap">
               <div class="table-responsive">
               <table
@@ -1081,7 +1275,6 @@ const eventPnlTone = (e: PositionEventRow): PnlTone => {
           </div>
           <div v-if="simLoading && simTotal === 0 && !simError" class="muted">加载中…</div>
           <div v-else-if="simError" class="aside-err">{{ simError }}</div>
-          <div v-else-if="simTotal === 0" class="muted">暂无模拟记录（启用监控后，新出现的 posId 会开仓记账）。</div>
           <template v-else>
             <div class="detail-table-rounded">
               <div class="table-responsive">
@@ -1304,6 +1497,40 @@ const eventPnlTone = (e: PositionEventRow): PnlTone => {
                   <dd>{{ formatTime(current.last_enabled_at) }}</dd>
                   <dt>快照时间</dt>
                   <dd>{{ formatTime(current.positions_refreshed_at) }}</dd>
+                  <dt>跟单帐户</dt>
+                  <dd class="okx-bind-block">
+                    <select
+                      v-model="okxBindSelect"
+                      class="form-select form-select-sm"
+                      :disabled="current.enabled || okxBindSaving"
+                      aria-label="选择跟单帐户"
+                    >
+                      <option value="">未选择</option>
+                      <option
+                        v-for="o in okxApiList"
+                        :key="o.id"
+                        :value="String(o.id)"
+                        :disabled="isOkxOptionDisabled(o)"
+                      >
+                        {{ okxOptionLabel(o) }}
+                      </option>
+                    </select>
+                    <div class="mt-2">
+                      <button
+                        type="button"
+                        class="btn btn-sm btn-primary"
+                        :disabled="current.enabled || okxBindSaving"
+                        @click="saveOkxBind"
+                      >
+                        {{ okxBindSaving ? '保存中…' : '保存绑定' }}
+                      </button>
+                    </div>
+                    <span
+                      v-if="okxBindMsg"
+                      class="small d-block mt-1"
+                      :class="okxBindMsg.includes('失败') || okxBindMsg.includes('错误') ? 'text-danger' : 'text-success'"
+                    >{{ okxBindMsg }}</span>
+                  </dd>
                 </dl>
               </section>
 
@@ -1315,13 +1542,22 @@ const eventPnlTone = (e: PositionEventRow): PnlTone => {
                   >跟单配置</span>
                 </h2>
                 <form class="follow-config-form" @submit.prevent="saveFollowConfig">
+                  <div class="form-check mb-3">
+                    <input
+                      id="fc-live-trading"
+                      v-model="followCfg.live_trading_enabled"
+                      class="form-check-input"
+                      type="checkbox"
+                    />
+                    <label class="form-check-label" for="fc-live-trading">启用真实交易</label>
+                  </div>
                   <div class="mb-2">
                     <label
                       class="form-label mb-1 hint-cursor"
                       for="fc-max-n"
                       :title="maxFollowPositionsLabelHint"
                     >
-                      最多同时跟几个仓位（n）
+                      跟单仓位数
                     </label>
                     <input
                       id="fc-max-n"
@@ -1333,7 +1569,7 @@ const eventPnlTone = (e: PositionEventRow): PnlTone => {
                     />
                   </div>
                   <div class="mb-2">
-                    <label class="form-label mb-1" for="fc-bet">每个仓位下注金额（USDT）</label>
+                    <label class="form-label mb-1" for="fc-bet">下注金额</label>
                     <input
                       id="fc-bet"
                       v-model.number="followCfg.bet_amount_per_position"
@@ -1345,7 +1581,7 @@ const eventPnlTone = (e: PositionEventRow): PnlTone => {
                     />
                   </div>
                   <div class="mb-2">
-                    <label class="form-label mb-1" for="fc-add">追加比例（相对下注金额）</label>
+                    <label class="form-label mb-1" for="fc-add">追加比例</label>
                     <input
                       id="fc-add"
                       v-model.number="followCfg.margin_add_ratio_of_bet"
@@ -1358,7 +1594,7 @@ const eventPnlTone = (e: PositionEventRow): PnlTone => {
                     />
                   </div>
                   <div class="mb-2">
-                    <label class="form-label mb-1" for="fc-margin-max-times">保证金自动追加次数上限</label>
+                    <label class="form-label mb-1" for="fc-margin-max-times">追加次数上限</label>
                     <input
                       id="fc-margin-max-times"
                       type="number"
@@ -1371,6 +1607,10 @@ const eventPnlTone = (e: PositionEventRow): PnlTone => {
                       @input="onMarginAddMaxTimesInput"
                     />
                   </div>
+                  <p class="small text-muted mb-2">
+                    维持保证金率 &lt; 200% 时自动追加，金额 = 下注金额 × 追加比例；每条跟单约每 1 秒独立轮询绑定
+                    OKX，与「启动追加」「真实交易」「绑定 API」联动。
+                  </p>
                   <div class="form-check mb-3">
                     <input
                       id="fc-margin-auto"
@@ -1379,7 +1619,7 @@ const eventPnlTone = (e: PositionEventRow): PnlTone => {
                       type="checkbox"
                     />
                     <label class="form-check-label" for="fc-margin-auto">
-                      启用保证金率监控并自动追加（需配置 OKX API）
+                      启动追加
                     </label>
                   </div>
                   <div class="d-flex flex-wrap align-items-center gap-2">
@@ -1393,6 +1633,100 @@ const eventPnlTone = (e: PositionEventRow): PnlTone => {
                     <span v-if="configMsg" class="small text-muted">{{ configMsg }}</span>
                   </div>
                 </form>
+              </section>
+
+              <section v-if="current?.okx_api_account_id" class="linked-okx-card card-block">
+                <h2 class="mb-2 detail-panel-title">
+                  <span
+                    class="btn btn-warning hint-cursor"
+                    title="数据来自欧易私有接口，使用本页绑定的跟单帐户密钥；与「对方持仓/跟单持仓」模拟表相互独立。"
+                  >本人 OKX（绑定帐户）</span>
+                </h2>
+                <p v-if="linkedOkxErr" class="small text-danger mb-2">{{ linkedOkxErr }}</p>
+                <h3 class="h6 mb-2">我的持仓</h3>
+                <div v-if="linkedPosRows.length === 0" class="small text-muted mb-3">暂无持仓或暂无数据</div>
+                <div v-else class="table-responsive mb-3">
+                  <table class="table table-sm table-bordered align-middle mb-0 linked-okx-table">
+                    <thead class="table-light">
+                      <tr>
+                        <th>合约</th>
+                        <th>持仓方向</th>
+                        <th>持仓量</th>
+                        <th>开仓均价</th>
+                        <th>标记价</th>
+                        <th>未实现盈亏</th>
+                        <th>杠杆</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr v-for="(r, i) in linkedPosRows" :key="'p-' + i">
+                        <td class="mono sm">{{ pickLinkedStr(r, ['instId']) }}</td>
+                        <td>{{ pickLinkedStr(r, ['posSide']) }}</td>
+                        <td class="mono sm">{{ pickLinkedStr(r, ['pos']) }}</td>
+                        <td class="mono sm">{{ pickLinkedStr(r, ['avgPx']) }}</td>
+                        <td class="mono sm">{{ pickLinkedStr(r, ['markPx', 'last']) }}</td>
+                        <td class="mono sm">{{ pickLinkedStr(r, ['upl']) }}</td>
+                        <td class="mono sm">{{ pickLinkedStr(r, ['lever']) }}</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+                <h3 class="h6 mb-2">我的成交</h3>
+                <div v-if="linkedFillsRows.length === 0" class="small text-muted mb-3">暂无成交</div>
+                <div v-else class="table-responsive mb-3">
+                  <table class="table table-sm table-bordered align-middle mb-0 linked-okx-table">
+                    <thead class="table-light">
+                      <tr>
+                        <th>时间</th>
+                        <th>合约</th>
+                        <th>方向</th>
+                        <th>持仓方向</th>
+                        <th>成交价</th>
+                        <th>数量</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr v-for="(r, i) in linkedFillsRows" :key="'f-' + i">
+                        <td class="nowrap sm">{{ formatLinkedTs(pickLinkedStr(r, ['fillTime', 'ts'])) }}</td>
+                        <td class="mono sm">{{ pickLinkedStr(r, ['instId']) }}</td>
+                        <td>{{ pickLinkedStr(r, ['side']) }}</td>
+                        <td>{{ pickLinkedStr(r, ['posSide']) }}</td>
+                        <td class="mono sm">{{ pickLinkedStr(r, ['fillPx', 'px']) }}</td>
+                        <td class="mono sm">{{ pickLinkedStr(r, ['fillSz', 'sz']) }}</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+                <h3 class="h6 mb-2">保证金划转（账单 type=6）</h3>
+                <div v-if="linkedBillsRows.length === 0" class="small text-muted mb-0">暂无记录</div>
+                <div v-else class="table-responsive mb-0">
+                  <table class="table table-sm table-bordered align-middle mb-0 linked-okx-table">
+                    <thead class="table-light">
+                      <tr>
+                        <th>时间</th>
+                        <th>合约</th>
+                        <th>模式</th>
+                        <th>仓位保证金变动</th>
+                        <th>子类型</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr v-for="(r, i) in linkedBillsRows" :key="'b-' + i">
+                        <td class="nowrap sm">{{ formatLinkedTs(pickLinkedStr(r, ['ts'])) }}</td>
+                        <td class="mono sm">{{ pickLinkedStr(r, ['instId']) }}</td>
+                        <td>{{ pickLinkedStr(r, ['mgnMode']) }}</td>
+                        <td class="mono sm">{{ pickLinkedStr(r, ['posBalChg']) }}</td>
+                        <td class="mono sm">{{ pickLinkedStr(r, ['subType']) }}</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </section>
+              <section v-else class="linked-okx-card card-block">
+                <h2 class="mb-2 detail-panel-title">
+                  <span class="btn btn-secondary">本人 OKX</span>
+                </h2>
+                <p class="small text-muted mb-0">绑定跟单帐户后，此处展示该 API 下的真实持仓、成交与保证金流水（与模拟跟单表独立）。</p>
               </section>
           </div>
         </div>
@@ -1436,6 +1770,11 @@ const eventPnlTone = (e: PositionEventRow): PnlTone => {
 .back-home:hover {
   opacity: 1;
   text-decoration: underline;
+}
+
+.aside-okx-link {
+  display: block;
+  margin-bottom: 8px;
 }
 
 .aside-title {
@@ -1586,6 +1925,10 @@ const eventPnlTone = (e: PositionEventRow): PnlTone => {
 
 .detail-col-info > .card-block {
   margin-bottom: 0;
+}
+
+.linked-okx-table {
+  font-size: 12px;
 }
 
 @media (max-width: 991.98px) {
