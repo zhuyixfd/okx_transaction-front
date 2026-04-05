@@ -1734,9 +1734,9 @@ const eventPnlTone = (e: PositionEventRow): PnlTone => {
                     <tbody>
                       <tr v-for="(r, i) in linkedFillsPageSlice" :key="'lf-' + linkedFillsPage + '-' + i">
                         <td class="nowrap sm">{{ formatLinkedTs(pickLinkedStr(r, ['fillTime', 'ts'])) }}</td>
-                        <td class="mono sm">{{ pickLinkedStr(r, ['instId']) }}</td>
+                        <td class="mono sm">{{ instIdBaseCcy(pickLinkedStr(r, ['instId'])) }}</td>
                         <td>{{ pickLinkedStr(r, ['side']) }}</td>
-                        <td>{{ pickLinkedStr(r, ['posSide']) }}</td>
+                        <td>{{ formatPosSide(pickLinkedStr(r, ['posSide'])) }}</td>
                         <td class="mono sm">{{ pickLinkedStr(r, ['fillPx', 'px']) }}</td>
                         <td class="mono sm">{{ pickLinkedStr(r, ['fillSz', 'sz']) }}</td>
                       </tr>
@@ -1786,7 +1786,7 @@ const eventPnlTone = (e: PositionEventRow): PnlTone => {
                     <tbody>
                       <tr v-for="(r, i) in linkedBillsPageSlice" :key="'lb-' + linkedBillsPage + '-' + i">
                         <td class="nowrap sm">{{ formatLinkedTs(pickLinkedStr(r, ['ts'])) }}</td>
-                        <td class="mono sm">{{ pickLinkedStr(r, ['instId']) }}</td>
+                        <td class="mono sm">{{ instIdBaseCcy(pickLinkedStr(r, ['instId'])) }}</td>
                         <td>{{ pickLinkedStr(r, ['mgnMode']) }}</td>
                         <td class="mono sm">{{ pickLinkedStr(r, ['posBalChg']) }}</td>
                         <td class="mono sm">{{ pickLinkedStr(r, ['subType']) }}</td>
