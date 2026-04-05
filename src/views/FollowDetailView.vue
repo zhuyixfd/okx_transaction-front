@@ -614,10 +614,28 @@ const snapshotRoiDisplay = (p: PositionSnapshotRow): string => {
   return formatRoiPct(p.avg_px, p.last_px, p.pos_side)
 }
 
+/**
+ * 欧易 GET /account/positions 的 uplRatio：多为小数比率（如 0.0523 = 5.23%）。
+ * 无百分号时 ×100 再格式化为两位小数 + %；字段已带 % 则视为已是百分数，不再 ×100。
+ */
+const formatOkxPositionsUplRatioPct = (raw: string): string | null => {
+  if (raw === '—' || !String(raw).trim()) return null
+  const s0 = String(raw).trim()
+  const hadPct = /%/.test(s0)
+  const s = s0.replace(/%/g, '').trim().replace(/,/g, '')
+  const n = Number(s)
+  if (!Number.isFinite(n)) return null
+  const pct = hadPct ? n : n * 100
+  const sign = pct > 0 ? '+' : ''
+  return `${sign}${pct.toFixed(2)}%`
+}
+
 const linkedPosRoiDisplay = (r: Record<string, unknown>): string => {
   const ur = pickLinkedStr(r, ['uplRatio'])
-  const api = formatApiUplRatio(ur === '—' ? undefined : ur)
-  if (api) return api
+  if (ur !== '—') {
+    const fromApi = formatOkxPositionsUplRatioPct(ur)
+    if (fromApi) return fromApi
+  }
   const avg = pickLinkedStr(r, ['avgPx'])
   const mark = pickLinkedStr(r, ['markPx', 'last'])
   const side = pickLinkedStr(r, ['posSide'])
