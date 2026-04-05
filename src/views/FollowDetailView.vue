@@ -285,7 +285,7 @@ const snapshotSectionHint =
 
 /** 悬停「模拟跟单资金」标题（follow_sim_records） */
 const simRecordsSectionHint =
-  '按「下注金额」模拟资金变动；开仓写入记录，平仓结算已实现盈亏。未平仓行随标记价更新浮动盈亏。总收益 = 已实现合计 + 未平仓浮动合计（随行情变动）。仅模拟（未启用真实交易）时可删除单条记录；若对方该 posId 仍在持仓，监控会在下一轮再次生成模拟行。与「跟单持仓」欧易真实持仓无关。'
+  '按「下注金额」模拟资金变动；开仓写入记录，平仓结算已实现盈亏。未平仓行随标记价更新浮动盈亏。总收益 = 已实现合计 + 未平仓浮动合计（随行情变动）。操作列可删除单条模拟行（无确认）；若对方该 posId 仍在持仓，监控会在下一轮再次生成模拟行。与「跟单持仓」欧易真实持仓无关。'
 
 /** 悬停「跟单持仓」：本人绑定 OKX 的永续持仓 */
 const followMyPositionsSectionHint =
@@ -1209,17 +1209,9 @@ const linkedPosRowsDecorated = computed(() =>
 )
 
 /** 跟单记录：当前页内按币种排序（与持仓一致） */
-/** 仅模拟模式允许删库里的 follow_sim_records；与后端 DELETE 条件一致（看已保存的 live_trading_enabled）。 */
-const canDeleteSimRecords = computed(
-  () => !!current.value && !current.value.live_trading_enabled,
-)
-const simRecordDeleteBlockedHint =
-  '已启用真实交易时不能删除模拟记录；请在右侧关闭「启用真实交易」后再删。'
 const simRecordDeletingId = ref<number | null>(null)
 
 const deleteSimRecord = async (r: FollowSimRecordRow) => {
-  if (!canDeleteSimRecords.value) return
-  if (!window.confirm(`确定删除该条模拟记录（持仓编号 ${r.pos_id}）？`)) return
   const un = paramUniqueName.value
   if (!un) return
   simRecordDeletingId.value = r.id
@@ -1543,7 +1535,6 @@ const eventPnlTone = (e: PositionEventRow): PnlTone => {
                     <td class="nowrap sm">{{ simUpdatedCol(r) }}</td>
                     <td class="nowrap sm">
                       <button
-                        v-if="canDeleteSimRecords"
                         type="button"
                         class="btn btn-sm btn-outline-danger"
                         :disabled="simRecordDeletingId === r.id"
@@ -1551,11 +1542,6 @@ const eventPnlTone = (e: PositionEventRow): PnlTone => {
                       >
                         {{ simRecordDeletingId === r.id ? '删除中…' : '删除' }}
                       </button>
-                      <span
-                        v-else
-                        class="text-muted small"
-                        :title="simRecordDeleteBlockedHint"
-                      >—</span>
                     </td>
                   </tr>
                 </tbody>
