@@ -114,6 +114,8 @@ type FollowSimRecordRow = {
   entry_avg_px: string | null
   stake_usdt: string
   status: string
+  open_event_id?: number | null
+  close_event_id?: number | null
   exit_px: string | null
   realized_pnl_usdt: string | null
   unrealized_pnl_usdt: string
@@ -1526,20 +1528,19 @@ const simRecordsSorted = computed(() =>
   }),
 )
 
-const simInvestedByPosId = computed(() => {
-  const m = new Map<string, string>()
+const simInvestedByCloseEventId = computed(() => {
+  const m = new Map<number, string>()
   for (const r of simRecords.value) {
-    if (!r.pos_id) continue
+    const eid = r.close_event_id
+    if (eid == null) continue
     if (r.total_invested_usdt == null || String(r.total_invested_usdt).trim() === '') continue
-    if (!m.has(r.pos_id)) m.set(r.pos_id, String(r.total_invested_usdt))
+    if (!m.has(eid)) m.set(eid, String(r.total_invested_usdt))
   }
   return m
 })
 
 const eventInvestedDisplay = (e: PositionEventRow): string => {
-  const pid = e.pos_id ?? ''
-  if (!pid) return '—'
-  const v = simInvestedByPosId.value.get(pid)
+  const v = simInvestedByCloseEventId.value.get(e.id)
   return v == null ? '—' : formatUsdt3(v)
 }
 
