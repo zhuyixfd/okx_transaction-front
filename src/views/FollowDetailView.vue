@@ -20,6 +20,10 @@ type FollowRow = {
   margin_add_ratio_of_bet?: number | string | null
   margin_auto_enabled?: boolean
   margin_add_max_times?: number | null
+  maint_margin_ratio_threshold?: number | string | null
+  close_margin_ratio_threshold?: number | string | null
+  take_profit_ratio?: number | string | null
+  stop_loss_ratio?: number | string | null
   okx_api_account_id?: number | null
   live_trading_enabled?: boolean
 }
@@ -39,6 +43,14 @@ type FollowCfgForm = {
   margin_auto_enabled: boolean
   /** 追加次数上限；null 表示不限制 */
   margin_add_max_times: number | null
+  /** 维持保证金率阈值（比例，2=200%） */
+  maint_margin_ratio_threshold: number | null
+  /** 平仓保证金率阈值（比例，2=200%） */
+  close_margin_ratio_threshold: number | null
+  /** 止盈收益率阈值（比例，0.2=20%） */
+  take_profit_ratio: number | null
+  /** 止损收益率阈值（比例，0.1=10%） */
+  stop_loss_ratio: number | null
   /** true：真实交易（欧易私有接口）；false：仅模拟 */
   live_trading_enabled: boolean
 }
@@ -161,6 +173,10 @@ const followCfg = ref<FollowCfgForm>({
   margin_add_ratio_of_bet: 0.2,
   margin_auto_enabled: false,
   margin_add_max_times: null,
+  maint_margin_ratio_threshold: null,
+  close_margin_ratio_threshold: null,
+  take_profit_ratio: null,
+  stop_loss_ratio: null,
   live_trading_enabled: false,
 })
 const configSaving = ref(false)
@@ -351,7 +367,7 @@ const followMyPositionsSectionHint =
 
 /** 悬停「开仓 / 平仓记录」标题 */
 const eventsSectionHint =
-  '每 2 秒静默刷新当前页数据。仅当 posId 出现/消失时写入记录；未平仓行标记价等随快照刷新。平仓时间仅在「平仓」事件行显示。'
+  '每 2 秒静默刷新当前页数据。仅当 posId 出现/消失时写入记录；本表仅展示已平仓记录。'
 
 let pollTimer: ReturnType<typeof setInterval> | null = null
 
@@ -853,6 +869,7 @@ const snapshotUplSumUsdt = computed(() => {
 const linkedUplSumUsdt = computed(() => {
   let s = 0
   for (const r of linkedPosRows.value) {
+    if (!isLinkedCurrentPosition(r)) continue
     const raw = pickLinkedStr(r, ['upl'])
     if (raw === '—') continue
     const n = parsePnlString(raw)
@@ -939,6 +956,10 @@ const syncFollowCfgFromCurrent = () => {
     margin_add_ratio_of_bet: parseNum(c.margin_add_ratio_of_bet) ?? 0.2,
     margin_auto_enabled: Boolean(c.margin_auto_enabled),
     margin_add_max_times: parseNum(c.margin_add_max_times),
+    maint_margin_ratio_threshold: parseNum(c.maint_margin_ratio_threshold),
+    close_margin_ratio_threshold: parseNum(c.close_margin_ratio_threshold),
+    take_profit_ratio: parseNum(c.take_profit_ratio),
+    stop_loss_ratio: parseNum(c.stop_loss_ratio),
     live_trading_enabled: Boolean(c.live_trading_enabled),
   }
 }
@@ -997,6 +1018,10 @@ const saveFollowConfig = async () => {
         margin_add_ratio_of_bet: followCfg.value.margin_add_ratio_of_bet,
         margin_auto_enabled: followCfg.value.margin_auto_enabled,
         margin_add_max_times: followCfg.value.margin_add_max_times,
+        maint_margin_ratio_threshold: followCfg.value.maint_margin_ratio_threshold,
+        close_margin_ratio_threshold: followCfg.value.close_margin_ratio_threshold,
+        take_profit_ratio: followCfg.value.take_profit_ratio,
+        stop_loss_ratio: followCfg.value.stop_loss_ratio,
         live_trading_enabled: followCfg.value.live_trading_enabled,
       }),
     })
@@ -1386,9 +1411,18 @@ const linkedMarginCell = (r: Record<string, unknown>): string => {
   return formatMarginWithU(im === '—' ? undefined : im)
 }
 
+/** 本人持仓仅展示当前仓位：pos 数值存在且绝对值 > 0。 */
+const isLinkedCurrentPosition = (r: Record<string, unknown>): boolean => {
+  const raw = pickLinkedStr(r, ['pos'])
+  if (raw === '—') return false
+  const n = Number(String(raw).trim().replace(/,/g, ''))
+  return Number.isFinite(n) && Math.abs(n) > 1e-12
+}
+
 /** 跟单持仓（欧易 positions）：列与对方持仓对齐，排序规则与快照一致 */
 const linkedPosRowsDecorated = computed(() =>
   [...linkedPosRows.value]
+    .filter((r) => isLinkedCurrentPosition(r))
     .sort((a, b) => {
       const ca = instIdBaseCcy(pickLinkedStr(a, ['instId']))
       const cb = instIdBaseCcy(pickLinkedStr(b, ['instId']))
@@ -1445,6 +1479,9 @@ const simRecordsSorted = computed(() =>
     return String(a.pos_id).localeCompare(String(b.pos_id), 'en', { sensitivity: 'base' })
   }),
 )
+
+/** 跟单记录仅展示已平仓事件（close），隐藏正在持仓。 */
+const closedEventsOnly = computed(() => events.value.filter((e) => e.event_type === 'close'))
 
 /** 开平仓行：未平仓用实时标记价；已平仓用记录内均价/标记价估算方向 */
 const eventPnlTone = (e: PositionEventRow): PnlTone => {
@@ -1548,6 +1585,7 @@ const eventPnlTone = (e: PositionEventRow): PnlTone => {
                     <th>杠杆</th>
                     <th>收益额</th>
                     <th>收益率</th>
+                    <th>累计投入</th>
                     <th>持仓量</th>
                     <th>保证金</th>
                     <th>维持保证金率</th>
@@ -1637,7 +1675,7 @@ const eventPnlTone = (e: PositionEventRow): PnlTone => {
           </div>
           <template v-else>
             <p v-if="linkedOkxErr" class="small text-danger mb-2">{{ linkedOkxErr }}</p>
-            <div v-if="linkedPosRows.length === 0" class="small text-muted mb-0">暂无持仓或暂无数据</div>
+            <div v-if="linkedPosRowsDecorated.length === 0" class="small text-muted mb-0">暂无持仓或暂无数据</div>
             <div v-else class="detail-table-rounded">
               <div class="table-responsive">
                 <table
@@ -1713,7 +1751,7 @@ const eventPnlTone = (e: PositionEventRow): PnlTone => {
             <span
               class="btn btn-warning hint-cursor"
               :title="simRecordsSectionHint"
-            >跟单持仓</span>
+            >持仓操作</span>
           </h2>
           <div class="sim-totals subsection-gap">
             <span class="sim-total-pill">
@@ -1858,7 +1896,7 @@ const eventPnlTone = (e: PositionEventRow): PnlTone => {
           </h2>
           <div v-if="eventsLoading && eventsTotal === 0 && !eventsError" class="muted">加载记录中…</div>
           <div v-else-if="eventsError" class="aside-err">{{ eventsError }}</div>
-          <div v-else-if="eventsTotal === 0" class="muted">暂无记录（首次拉取仅建立 posId 快照；仅 posId 出现/消失会写入）。</div>
+          <div v-else-if="closedEventsOnly.length === 0" class="muted">暂无已平仓记录。</div>
           <template v-else>
             <div class="detail-table-rounded">
               <div class="table-responsive">
@@ -1875,14 +1913,14 @@ const eventPnlTone = (e: PositionEventRow): PnlTone => {
                     <th>收益率</th>
                     <th>持仓量</th>
                     <th>开仓均价</th>
-                    <th>标记价格</th>
+                    <th>平仓均价</th>
                     <th>开仓时间</th>
-                    <th>更新时间</th>
+                    <th>平仓时间</th>
                   </tr>
                 </thead>
                 <tbody>
                   <tr
-                    v-for="e in events"
+                    v-for="e in closedEventsOnly"
                     :key="e.id"
                     :class="rowClassFromPnlTone(eventPnlTone(e))"
                   >
@@ -1898,6 +1936,7 @@ const eventPnlTone = (e: PositionEventRow): PnlTone => {
                     <td>{{ formatLever(e.lever) }}</td>
                     <td :class="uplCellClass(eventUplRaw(e))">{{ formatUplUsdt(eventUplRaw(e)) }}</td>
                     <td :class="roiClassFromTone(eventPnlTone(e))">{{ eventRoiDisplay(e) }}</td>
+                    <td class="mono sm">—</td>
                     <td class="mono sm">{{ formatEventPosContracts(e) }}</td>
                     <td class="mono sm">{{ formatAvgPx(e.avg_px) }}</td>
                     <td
@@ -2230,6 +2269,54 @@ const eventPnlTone = (e: PositionEventRow): PnlTone => {
                       placeholder="留空表示不限制"
                       :value="followCfg.margin_add_max_times ?? ''"
                       @input="onMarginAddMaxTimesInput"
+                    />
+                  </div>
+                  <div class="mb-2">
+                    <label class="form-label mb-1" for="fc-maint-mgn">维持保证金率</label>
+                    <input
+                      id="fc-maint-mgn"
+                      v-model.number="followCfg.maint_margin_ratio_threshold"
+                      type="number"
+                      min="0"
+                      step="any"
+                      class="form-control form-control-sm"
+                      placeholder="例如 2 表示 200%"
+                    />
+                  </div>
+                  <div class="mb-2">
+                    <label class="form-label mb-1" for="fc-close-mgn">平仓保证金率</label>
+                    <input
+                      id="fc-close-mgn"
+                      v-model.number="followCfg.close_margin_ratio_threshold"
+                      type="number"
+                      min="0"
+                      step="any"
+                      class="form-control form-control-sm"
+                      placeholder="例如 1.5 表示 150%"
+                    />
+                  </div>
+                  <div class="mb-2">
+                    <label class="form-label mb-1" for="fc-tp-ratio">止盈收益率</label>
+                    <input
+                      id="fc-tp-ratio"
+                      v-model.number="followCfg.take_profit_ratio"
+                      type="number"
+                      min="0"
+                      step="any"
+                      class="form-control form-control-sm"
+                      placeholder="例如 0.2 表示 20%"
+                    />
+                  </div>
+                  <div class="mb-2">
+                    <label class="form-label mb-1" for="fc-sl-ratio">止损收益率</label>
+                    <input
+                      id="fc-sl-ratio"
+                      v-model.number="followCfg.stop_loss_ratio"
+                      type="number"
+                      min="0"
+                      step="any"
+                      class="form-control form-control-sm"
+                      placeholder="例如 0.1 表示 10%"
                     />
                   </div>
                   <p class="small text-muted mb-2">
