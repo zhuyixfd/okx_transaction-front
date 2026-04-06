@@ -1527,6 +1527,7 @@ const simRecordsSorted = computed(() =>
     return String(a.pos_id).localeCompare(String(b.pos_id), 'en', { sensitivity: 'base' })
   }),
 )
+const openSimRecords = computed(() => simRecordsSorted.value.filter((r) => r.status === 'open'))
 
 const simInvestedByCloseEventId = computed(() => {
   const m = new Map<number, string>()
@@ -1842,7 +1843,7 @@ const eventPnlTone = (e: PositionEventRow): PnlTone => {
                 </thead>
                 <tbody>
                   <tr
-                    v-for="r in simRecordsSorted"
+                    v-for="r in openSimRecords"
                     :key="r.id"
                     :class="rowClassFromPnlTone(simPnlTone(r))"
                   >
