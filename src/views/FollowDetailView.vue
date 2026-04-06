@@ -129,6 +129,7 @@ type FollowSimRecordRow = {
   add_position_count?: number
   reduce_position_count?: number
   add_margin_count?: number
+  total_invested_usdt?: string
 }
 
 const props = defineProps<{
@@ -1525,6 +1526,23 @@ const simRecordsSorted = computed(() =>
   }),
 )
 
+const simInvestedByPosId = computed(() => {
+  const m = new Map<string, string>()
+  for (const r of simRecords.value) {
+    if (!r.pos_id) continue
+    if (r.total_invested_usdt == null || String(r.total_invested_usdt).trim() === '') continue
+    if (!m.has(r.pos_id)) m.set(r.pos_id, String(r.total_invested_usdt))
+  }
+  return m
+})
+
+const eventInvestedDisplay = (e: PositionEventRow): string => {
+  const pid = e.pos_id ?? ''
+  if (!pid) return '—'
+  const v = simInvestedByPosId.value.get(pid)
+  return v == null ? '—' : formatUsdt3(v)
+}
+
 /** 跟单记录仅展示已平仓事件（close），隐藏正在持仓。 */
 const closedEventsOnly = computed(() => events.value.filter((e) => e.event_type === 'close'))
 
@@ -1970,7 +1988,7 @@ const eventPnlTone = (e: PositionEventRow): PnlTone => {
                     <td>{{ formatLever(e.lever) }}</td>
                     <td :class="uplCellClass(eventUplRaw(e))">{{ formatUplUsdt(eventUplRaw(e)) }}</td>
                     <td :class="roiClassFromTone(eventPnlTone(e))">{{ eventRoiDisplay(e) }}</td>
-                    <td class="mono sm">—</td>
+                    <td class="mono sm">{{ eventInvestedDisplay(e) }}</td>
                     <td class="mono sm">{{ formatEventPosContracts(e) }}</td>
                     <td class="mono sm">{{ formatAvgPx(e.avg_px) }}</td>
                     <td
