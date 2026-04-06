@@ -1527,7 +1527,24 @@ const simRecordsSorted = computed(() =>
     return String(a.pos_id).localeCompare(String(b.pos_id), 'en', { sensitivity: 'base' })
   }),
 )
-const openSimRecords = computed(() => simRecordsSorted.value.filter((r) => r.status === 'open'))
+/**
+ * 持仓操作按“对方仓位”展示：同一 pos_id 仅保留最新一条记录（避免开平后重复）。
+ * 手动平掉本人仓位后，该条仍保留，可继续点「开仓」重新跟。
+ */
+const simRecordsLatestByPos = computed(() => {
+  const byPos = new Map<string, FollowSimRecordRow>()
+  for (const r of simRecords.value) {
+    const k = String(r.pos_id ?? '').trim()
+    if (!k) continue
+    const prev = byPos.get(k)
+    if (!prev || r.id > prev.id) byPos.set(k, r)
+  }
+  return [...byPos.values()].sort((a, b) => {
+    const c = comparePosCcy(a.pos_ccy, b.pos_ccy)
+    if (c !== 0) return c
+    return String(a.pos_id).localeCompare(String(b.pos_id), 'en', { sensitivity: 'base' })
+  })
+})
 
 const simInvestedByCloseEventId = computed(() => {
   const m = new Map<number, string>()
@@ -1843,7 +1860,7 @@ const eventPnlTone = (e: PositionEventRow): PnlTone => {
                 </thead>
                 <tbody>
                   <tr
-                    v-for="r in openSimRecords"
+                    v-for="r in simRecordsLatestByPos"
                     :key="r.id"
                     :class="rowClassFromPnlTone(simPnlTone(r))"
                   >
