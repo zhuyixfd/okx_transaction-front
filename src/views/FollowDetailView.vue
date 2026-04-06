@@ -1472,6 +1472,16 @@ const deleteSimRecord = async (r: FollowSimRecordRow) => {
   }
 }
 
+const onPositionActionClick = (
+  action: 'add' | 'reduce' | 'close' | 'reverse',
+  r: FollowSimRecordRow,
+) => {
+  const aid = current.value?.id ?? '-'
+  const pid = r.pos_id ?? '-'
+  // 占位：后续接真实「加仓/减仓/平仓/反手」接口
+  console.info(`[position_action] ${action} follow_id=${aid} pos_id=${pid}`)
+}
+
 const simRecordsSorted = computed(() =>
   [...simRecords.value].sort((a, b) => {
     const c = comparePosCcy(a.pos_ccy, b.pos_ccy)
@@ -1803,17 +1813,13 @@ const eventPnlTone = (e: PositionEventRow): PnlTone => {
                     <th>方向</th>
                     <th>杠杆</th>
                     <th>本金</th>
-                    <th>收益额</th>
-                    <th>收益率</th>
-                    <th>持仓量</th>
-                    <th>保证金</th>
-                    <th>维持保证金率</th>
-                    <th>开仓均价</th>
-                    <th>标记价格</th>
-                    <th>预估强平价</th>
-                    <th>开仓时间</th>
-                    <th>更新时间</th>
-                    <th class="nowrap sm">操作</th>
+                    <th>加仓次数</th>
+                    <th>减仓次数</th>
+                    <th>追加保证金次数</th>
+                    <th class="nowrap sm">加仓</th>
+                    <th class="nowrap sm">减仓</th>
+                    <th class="nowrap sm">平仓</th>
+                    <th class="nowrap sm">反手</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -1833,24 +1839,43 @@ const eventPnlTone = (e: PositionEventRow): PnlTone => {
                     <td>{{ formatPosSide(r.pos_side) }}</td>
                     <td>{{ simLeverDisplay(r) }}</td>
                     <td class="mono sm">{{ formatUsdt3(r.stake_usdt) }}</td>
-                    <td class="mono sm">{{ formatUsdt3(simPnlDisplay(r)) }}</td>
-                    <td :class="roiClassFromTone(simRowMarkTone(r))">{{ simRoiDisplayRow(r) }}</td>
-                    <td class="mono sm">{{ formatPosContractsDisplay(r.src_pos) }}</td>
-                    <td class="mono sm">{{ formatMarginWithU(r.src_margin) }}</td>
-                    <td class="mono sm">{{ formatMaintMarginRatioPct(r.src_mgn_ratio) }}</td>
-                    <td class="mono sm">{{ formatAvgPx(r.entry_avg_px) }}</td>
-                    <td class="mono sm">{{ simPxLabel(r) }}</td>
-                    <td class="mono sm">{{ simRecordExtraText(r.src_liq_px) || '—' }}</td>
-                    <td class="nowrap sm">{{ formatTime(r.opened_at) }}</td>
-                    <td class="nowrap sm">{{ simUpdatedCol(r) }}</td>
+                    <td class="mono sm">—</td>
+                    <td class="mono sm">—</td>
+                    <td class="mono sm">—</td>
+                    <td class="nowrap sm">
+                      <button
+                        type="button"
+                        class="btn btn-sm btn-outline-primary"
+                        @click="onPositionActionClick('add', r)"
+                      >
+                        加仓
+                      </button>
+                    </td>
+                    <td class="nowrap sm">
+                      <button
+                        type="button"
+                        class="btn btn-sm btn-outline-warning"
+                        @click="onPositionActionClick('reduce', r)"
+                      >
+                        减仓
+                      </button>
+                    </td>
                     <td class="nowrap sm">
                       <button
                         type="button"
                         class="btn btn-sm btn-outline-danger"
-                        :disabled="simRecordDeletingId === r.id"
-                        @click="deleteSimRecord(r)"
+                        @click="onPositionActionClick('close', r)"
                       >
-                        {{ simRecordDeletingId === r.id ? '删除中…' : '删除' }}
+                        平仓
+                      </button>
+                    </td>
+                    <td class="nowrap sm">
+                      <button
+                        type="button"
+                        class="btn btn-sm btn-outline-secondary"
+                        @click="onPositionActionClick('reverse', r)"
+                      >
+                        反手
                       </button>
                     </td>
                   </tr>
