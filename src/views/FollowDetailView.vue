@@ -1797,42 +1797,6 @@ const eventPnlTone = (e: PositionEventRow): PnlTone => {
               :title="simRecordsSectionHint"
             >持仓操作</span>
           </h2>
-          <div class="sim-totals subsection-gap">
-            <span class="sim-total-pill">
-              总收益（USDT）<strong
-                class="mono sim-total-pnl-val"
-                :class="{
-                  'sim-total-pnl-pos': simTotalPnlTone === 'pos',
-                  'sim-total-pnl-neg': simTotalPnlTone === 'neg',
-                  'sim-total-pnl-zero': simTotalPnlTone === 'zero',
-                  'sim-total-pnl-neutral': simTotalPnlTone === 'neutral',
-                }"
-              >{{ formatUsdt3(simTotalPnl) }}</strong>
-            </span>
-            <span class="sim-total-meta small">
-              <span class="text-muted">已实现 </span>
-              <strong
-                class="mono sim-sub-pnl-val"
-                :class="{
-                  'sim-total-pnl-pos': simRealizedPnlTone === 'pos',
-                  'sim-total-pnl-neg': simRealizedPnlTone === 'neg',
-                  'sim-total-pnl-zero': simRealizedPnlTone === 'zero',
-                  'sim-total-pnl-neutral': simRealizedPnlTone === 'neutral',
-                }"
-              >{{ formatUsdt3(simRealizedSum) }}</strong>
-              <span class="text-muted"> · </span>
-              <span class="text-muted">浮动 </span>
-              <strong
-                class="mono sim-sub-pnl-val"
-                :class="{
-                  'sim-total-pnl-pos': simUnrealizedPnlTone === 'pos',
-                  'sim-total-pnl-neg': simUnrealizedPnlTone === 'neg',
-                  'sim-total-pnl-zero': simUnrealizedPnlTone === 'zero',
-                  'sim-total-pnl-neutral': simUnrealizedPnlTone === 'neutral',
-                }"
-              >{{ formatUsdt3(simUnrealizedSum) }}</strong>
-            </span>
-          </div>
           <div v-if="simLoading && simTotal === 0 && !simError" class="muted">加载中…</div>
           <div v-else-if="simError" class="aside-err">{{ simError }}</div>
           <template v-else>
