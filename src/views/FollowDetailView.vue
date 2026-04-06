@@ -1882,7 +1882,7 @@ const eventPnlTone = (e: PositionEventRow): PnlTone => {
                       <button
                         type="button"
                         class="btn btn-sm btn-primary"
-                        :disabled="r.status !== 'open' || simActionRunningId === r.id"
+                        :disabled="simActionRunningId === r.id"
                         @click="onPositionActionClick('add', r)"
                       >
                         {{ hasLinkedPositionForRecord(r) ? '加仓' : '开仓' }}
