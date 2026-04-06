@@ -1845,7 +1845,7 @@ const eventPnlTone = (e: PositionEventRow): PnlTone => {
                     <td class="nowrap sm">
                       <button
                         type="button"
-                        class="btn btn-sm btn-outline-primary"
+                        class="btn btn-sm btn-primary"
                         @click="onPositionActionClick('add', r)"
                       >
                         加仓
@@ -1854,7 +1854,7 @@ const eventPnlTone = (e: PositionEventRow): PnlTone => {
                     <td class="nowrap sm">
                       <button
                         type="button"
-                        class="btn btn-sm btn-outline-warning"
+                        class="btn btn-sm btn-warning"
                         @click="onPositionActionClick('reduce', r)"
                       >
                         减仓
@@ -1863,7 +1863,7 @@ const eventPnlTone = (e: PositionEventRow): PnlTone => {
                     <td class="nowrap sm">
                       <button
                         type="button"
-                        class="btn btn-sm btn-outline-danger"
+                        class="btn btn-sm btn-danger"
                         @click="onPositionActionClick('close', r)"
                       >
                         平仓
@@ -1872,7 +1872,7 @@ const eventPnlTone = (e: PositionEventRow): PnlTone => {
                     <td class="nowrap sm">
                       <button
                         type="button"
-                        class="btn btn-sm btn-outline-secondary"
+                        class="btn btn-sm btn-secondary"
                         @click="onPositionActionClick('reverse', r)"
                       >
                         反手
