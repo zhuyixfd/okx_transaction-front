@@ -126,6 +126,9 @@ type FollowSimRecordRow = {
   src_margin?: string | null
   src_mgn_ratio?: string | null
   src_liq_px?: string | null
+  add_position_count?: number
+  reduce_position_count?: number
+  add_margin_count?: number
 }
 
 const props = defineProps<{
@@ -1445,6 +1448,7 @@ const linkedPosRowsDecorated = computed(() =>
 
 /** 跟单记录：当前页内按币种排序（与持仓一致） */
 const simRecordDeletingId = ref<number | null>(null)
+const simActionRunningId = ref<number | null>(null)
 
 const deleteSimRecord = async (r: FollowSimRecordRow) => {
   const un = paramUniqueName.value
@@ -1472,14 +1476,37 @@ const deleteSimRecord = async (r: FollowSimRecordRow) => {
   }
 }
 
-const onPositionActionClick = (
+const onPositionActionClick = async (
   action: 'add' | 'reduce' | 'close' | 'reverse',
   r: FollowSimRecordRow,
 ) => {
-  const aid = current.value?.id ?? '-'
-  const pid = r.pos_id ?? '-'
-  // 占位：后续接真实「加仓/减仓/平仓/反手」接口
-  console.info(`[position_action] ${action} follow_id=${aid} pos_id=${pid}`)
+  const un = paramUniqueName.value
+  if (!un) return
+  simActionRunningId.value = r.id
+  simError.value = ''
+  try {
+    const res = await fetch(`${API_BASE}/follow-accounts/position-action`, {
+      method: 'POST',
+      headers: authHeaders(),
+      body: JSON.stringify({
+        unique_name: un,
+        sim_record_id: r.id,
+        action,
+      }),
+    })
+    const body = (await res.json().catch(() => ({}))) as { detail?: unknown }
+    if (!res.ok) {
+      const d = body.detail
+      simError.value =
+        typeof d === 'string' ? d : d != null ? JSON.stringify(d) : `操作失败 (${res.status})`
+      return
+    }
+    await Promise.all([loadSimRecords(true), loadLinkedOkxTradeData(true)])
+  } catch (e: unknown) {
+    simError.value = e instanceof Error ? e.message : '网络错误'
+  } finally {
+    simActionRunningId.value = null
+  }
 }
 
 const simRecordsSorted = computed(() =>
@@ -1839,13 +1866,14 @@ const eventPnlTone = (e: PositionEventRow): PnlTone => {
                     <td>{{ formatPosSide(r.pos_side) }}</td>
                     <td>{{ simLeverDisplay(r) }}</td>
                     <td class="mono sm">{{ formatUsdt3(r.stake_usdt) }}</td>
-                    <td class="mono sm">—</td>
-                    <td class="mono sm">—</td>
-                    <td class="mono sm">—</td>
+                    <td class="mono sm">{{ r.add_position_count ?? 0 }}</td>
+                    <td class="mono sm">{{ r.reduce_position_count ?? 0 }}</td>
+                    <td class="mono sm">{{ r.add_margin_count ?? 0 }}</td>
                     <td class="nowrap sm">
                       <button
                         type="button"
                         class="btn btn-sm btn-primary"
+                        :disabled="r.status !== 'open' || simActionRunningId === r.id"
                         @click="onPositionActionClick('add', r)"
                       >
                         加仓
@@ -1855,6 +1883,7 @@ const eventPnlTone = (e: PositionEventRow): PnlTone => {
                       <button
                         type="button"
                         class="btn btn-sm btn-warning"
+                        :disabled="r.status !== 'open' || simActionRunningId === r.id"
                         @click="onPositionActionClick('reduce', r)"
                       >
                         减仓
@@ -1864,6 +1893,7 @@ const eventPnlTone = (e: PositionEventRow): PnlTone => {
                       <button
                         type="button"
                         class="btn btn-sm btn-danger"
+                        :disabled="r.status !== 'open' || simActionRunningId === r.id"
                         @click="onPositionActionClick('close', r)"
                       >
                         平仓
@@ -1873,6 +1903,7 @@ const eventPnlTone = (e: PositionEventRow): PnlTone => {
                       <button
                         type="button"
                         class="btn btn-sm btn-secondary"
+                        :disabled="r.status !== 'open' || simActionRunningId === r.id"
                         @click="onPositionActionClick('reverse', r)"
                       >
                         反手
