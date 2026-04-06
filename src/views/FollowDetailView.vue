@@ -1528,24 +1528,7 @@ const simRecordsSorted = computed(() =>
   }),
 )
 
-const simInvestedByCloseEventId = computed(() => {
-  const m = new Map<number, string>()
-  for (const r of simRecords.value) {
-    const eid = r.close_event_id
-    if (eid == null) continue
-    if (r.total_invested_usdt == null || String(r.total_invested_usdt).trim() === '') continue
-    if (!m.has(eid)) m.set(eid, String(r.total_invested_usdt))
-  }
-  return m
-})
-
-const eventInvestedDisplay = (e: PositionEventRow): string => {
-  const v = simInvestedByCloseEventId.value.get(e.id)
-  return v == null ? '—' : formatUsdt3(v)
-}
-
-/** 跟单记录仅展示已平仓事件（close），隐藏正在持仓。 */
-const closedEventsOnly = computed(() => events.value.filter((e) => e.event_type === 'close'))
+const closedSimRecords = computed(() => simRecordsSorted.value.filter((r) => r.status === 'closed'))
 
 /** 开平仓行：未平仓用实时标记价；已平仓用记录内均价/标记价估算方向 */
 const eventPnlTone = (e: PositionEventRow): PnlTone => {
@@ -1948,7 +1931,7 @@ const eventPnlTone = (e: PositionEventRow): PnlTone => {
           </h2>
           <div v-if="eventsLoading && eventsTotal === 0 && !eventsError" class="muted">加载记录中…</div>
           <div v-else-if="eventsError" class="aside-err">{{ eventsError }}</div>
-          <div v-else-if="closedEventsOnly.length === 0" class="muted">暂无已平仓记录。</div>
+          <div v-else-if="closedSimRecords.length === 0" class="muted">暂无已平仓记录。</div>
           <template v-else>
             <div class="detail-table-rounded">
               <div class="table-responsive">
@@ -1973,31 +1956,28 @@ const eventPnlTone = (e: PositionEventRow): PnlTone => {
                 </thead>
                 <tbody>
                   <tr
-                    v-for="e in closedEventsOnly"
-                    :key="e.id"
-                    :class="rowClassFromPnlTone(eventPnlTone(e))"
+                    v-for="r in closedSimRecords"
+                    :key="'sim-closed-' + r.id"
+                    :class="rowClassFromPnlTone(simPnlTone(r))"
                   >
                     <td class="mono td-pos-id">
                       <span
-                        v-if="!positionClosedForEvent(e) && e.pos_id && eventPnlTone(e) !== 'neutral'"
-                        :class="badgeClassFromPnlTone(eventPnlTone(e))"
-                      >{{ e.pos_id }}</span>
-                      <template v-else>{{ e.pos_id ?? '—' }}</template>
+                        v-if="simPnlTone(r) !== 'neutral'"
+                        :class="badgeClassFromPnlTone(simPnlTone(r))"
+                      >{{ r.pos_id }}</span>
+                      <template v-else>{{ r.pos_id ?? '—' }}</template>
                     </td>
-                    <td>{{ e.pos_ccy ?? '—' }}</td>
-                    <td>{{ formatPosSide(e.pos_side) }}</td>
-                    <td>{{ formatLever(e.lever) }}</td>
-                    <td :class="uplCellClass(eventUplRaw(e))">{{ formatUplUsdt(eventUplRaw(e)) }}</td>
-                    <td :class="roiClassFromTone(eventPnlTone(e))">{{ eventRoiDisplay(e) }}</td>
-                    <td class="mono sm">{{ eventInvestedDisplay(e) }}</td>
-                    <td class="mono sm">{{ formatEventPosContracts(e) }}</td>
-                    <td class="mono sm">{{ formatAvgPx(e.avg_px) }}</td>
-                    <td
-                      class="mono sm"
-                      :class="{ 'mark-col': !positionClosedForEvent(e) }"
-                    >{{ eventMarkPx(e) }}</td>
-                    <td class="nowrap sm">{{ formatEventOpenTime(e) }}</td>
-                    <td class="nowrap sm">{{ formatTime(e.created_at) }}</td>
+                    <td>{{ r.pos_ccy ?? '—' }}</td>
+                    <td>{{ formatPosSide(r.pos_side) }}</td>
+                    <td>{{ simLeverDisplay(r) }}</td>
+                    <td class="mono sm">{{ formatUsdt3(simPnlDisplay(r)) }}</td>
+                    <td :class="roiClassFromTone(simRowMarkTone(r))">{{ simRoiDisplayRow(r) }}</td>
+                    <td class="mono sm">{{ formatUsdt3(r.total_invested_usdt) }}</td>
+                    <td class="mono sm">{{ formatPosContractsDisplay(r.src_pos) }}</td>
+                    <td class="mono sm">{{ formatAvgPx(r.entry_avg_px) }}</td>
+                    <td class="mono sm">{{ simRecordExtraText(r.exit_px) || '—' }}</td>
+                    <td class="nowrap sm">{{ formatTime(r.opened_at) }}</td>
+                    <td class="nowrap sm">{{ formatTime(r.closed_at) }}</td>
                   </tr>
                 </tbody>
               </table>
