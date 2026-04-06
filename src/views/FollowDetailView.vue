@@ -1585,7 +1585,6 @@ const eventPnlTone = (e: PositionEventRow): PnlTone => {
                     <th>杠杆</th>
                     <th>收益额</th>
                     <th>收益率</th>
-                    <th>累计投入</th>
                     <th>持仓量</th>
                     <th>保证金</th>
                     <th>维持保证金率</th>
@@ -1806,7 +1805,6 @@ const eventPnlTone = (e: PositionEventRow): PnlTone => {
                     <th>本金</th>
                     <th>收益额</th>
                     <th>收益率</th>
-                    <th>累计投入</th>
                     <th>持仓量</th>
                     <th>保证金</th>
                     <th>维持保证金率</th>
@@ -1912,6 +1910,7 @@ const eventPnlTone = (e: PositionEventRow): PnlTone => {
                     <th>杠杆</th>
                     <th>收益额</th>
                     <th>收益率</th>
+                    <th>累计投入</th>
                     <th>持仓量</th>
                     <th>开仓均价</th>
                     <th>平仓均价</th>
