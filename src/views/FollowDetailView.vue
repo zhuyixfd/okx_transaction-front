@@ -1509,6 +1509,14 @@ const onPositionActionClick = async (
   }
 }
 
+const hasLinkedPositionForRecord = (r: FollowSimRecordRow): boolean => {
+  const ccy = String(r.pos_ccy ?? '').trim().toUpperCase()
+  if (!ccy) return false
+  return linkedPosRowsDecorated.value.some(
+    (row) => instIdBaseCcy(pickLinkedStr(row.r, ['instId'])).toUpperCase() === ccy,
+  )
+}
+
 const simRecordsSorted = computed(() =>
   [...simRecords.value].sort((a, b) => {
     const c = comparePosCcy(a.pos_ccy, b.pos_ccy)
@@ -1876,11 +1884,12 @@ const eventPnlTone = (e: PositionEventRow): PnlTone => {
                         :disabled="r.status !== 'open' || simActionRunningId === r.id"
                         @click="onPositionActionClick('add', r)"
                       >
-                        加仓
+                        {{ hasLinkedPositionForRecord(r) ? '加仓' : '开仓' }}
                       </button>
                     </td>
                     <td class="nowrap sm">
                       <button
+                        v-if="hasLinkedPositionForRecord(r)"
                         type="button"
                         class="btn btn-sm btn-warning"
                         :disabled="r.status !== 'open' || simActionRunningId === r.id"
@@ -1888,9 +1897,11 @@ const eventPnlTone = (e: PositionEventRow): PnlTone => {
                       >
                         减仓
                       </button>
+                      <span v-else class="text-muted">—</span>
                     </td>
                     <td class="nowrap sm">
                       <button
+                        v-if="hasLinkedPositionForRecord(r)"
                         type="button"
                         class="btn btn-sm btn-danger"
                         :disabled="r.status !== 'open' || simActionRunningId === r.id"
@@ -1898,9 +1909,11 @@ const eventPnlTone = (e: PositionEventRow): PnlTone => {
                       >
                         平仓
                       </button>
+                      <span v-else class="text-muted">—</span>
                     </td>
                     <td class="nowrap sm">
                       <button
+                        v-if="hasLinkedPositionForRecord(r)"
                         type="button"
                         class="btn btn-sm btn-secondary"
                         :disabled="r.status !== 'open' || simActionRunningId === r.id"
@@ -1908,6 +1921,7 @@ const eventPnlTone = (e: PositionEventRow): PnlTone => {
                       >
                         反手
                       </button>
+                      <span v-else class="text-muted">—</span>
                     </td>
                   </tr>
                 </tbody>
