@@ -1452,6 +1452,7 @@ const linkedPosRowsDecorated = computed(() =>
 /** 跟单记录：当前页内按币种排序（与持仓一致） */
 const simRecordDeletingId = ref<number | null>(null)
 const simActionRunningId = ref<number | null>(null)
+const snapshotFollowRunningPosId = ref<string | null>(null)
 
 const deleteSimRecord = async (r: FollowSimRecordRow) => {
   const un = paramUniqueName.value
@@ -1518,6 +1519,43 @@ const hasLinkedPositionForRecord = (r: FollowSimRecordRow): boolean => {
   return linkedPosRowsDecorated.value.some(
     (row) => instIdBaseCcy(pickLinkedStr(row.r, ['instId'])).toUpperCase() === ccy,
   )
+}
+
+const hasLinkedPositionForCcy = (ccyRaw: string | null | undefined): boolean => {
+  const ccy = String(ccyRaw ?? '').trim().toUpperCase()
+  if (!ccy) return false
+  return linkedPosRowsDecorated.value.some(
+    (row) => instIdBaseCcy(pickLinkedStr(row.r, ['instId'])).toUpperCase() === ccy,
+  )
+}
+
+const onSnapshotFollowClick = async (p: PositionSnapshotRow) => {
+  const un = paramUniqueName.value
+  const posId = String(p.pos_id ?? '').trim()
+  if (!un || !posId) return
+  snapshotFollowRunningPosId.value = posId
+  simError.value = ''
+  try {
+    const res = await fetch(`${API_BASE}/follow-accounts/snapshot-follow`, {
+      method: 'POST',
+      headers: authHeaders(),
+      body: JSON.stringify({
+        unique_name: un,
+        pos_id: posId,
+      }),
+    })
+    const body = (await res.json().catch(() => ({}))) as { detail?: unknown }
+    if (!res.ok) {
+      const d = body.detail
+      simError.value = typeof d === 'string' ? d : d != null ? JSON.stringify(d) : `跟单失败 (${res.status})`
+      return
+    }
+    await Promise.all([loadSimRecords(true), loadLinkedOkxTradeData(true)])
+  } catch (e: unknown) {
+    simError.value = e instanceof Error ? e.message : '网络错误'
+  } finally {
+    snapshotFollowRunningPosId.value = null
+  }
 }
 
 const simRecordsSorted = computed(() =>
@@ -1675,6 +1713,7 @@ const eventPnlTone = (e: PositionEventRow): PnlTone => {
                     <th>预估强平价</th>
                     <th>开仓时间</th>
                     <th>更新时间</th>
+                    <th class="nowrap sm">跟单</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -1700,6 +1739,18 @@ const eventPnlTone = (e: PositionEventRow): PnlTone => {
                     <td class="mono sm">{{ simRecordExtraText(row.p.liq_px) || '—' }}</td>
                     <td class="nowrap sm">{{ row.p.c_time_format ?? '—' }}</td>
                     <td class="nowrap sm">{{ formatTime(snapshot.refreshed_at) }}</td>
+                    <td class="nowrap sm">
+                      <button
+                        v-if="!hasLinkedPositionForCcy(row.p.pos_ccy)"
+                        type="button"
+                        class="btn btn-sm btn-primary"
+                        :disabled="snapshotFollowRunningPosId === row.p.pos_id"
+                        @click="onSnapshotFollowClick(row.p)"
+                      >
+                        跟单
+                      </button>
+                      <span v-else class="text-muted">—</span>
+                    </td>
                   </tr>
                 </tbody>
               </table>
