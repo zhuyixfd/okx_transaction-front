@@ -93,6 +93,9 @@ type PositionSnapshotRow = {
   /** 欧易 upl，未实现盈亏（USDT） */
   upl?: string | null
   pos?: string | null
+  notional_usd?: string | null
+  notional_ccy?: string | null
+  notional?: string | null
   margin?: string | null
   mgn_ratio?: string | null
   liq_px?: string | null
@@ -1422,6 +1425,11 @@ const linkedPositionValueCell = (r: Record<string, unknown>): string => {
   return formatMarginWithU(v)
 }
 
+const snapshotPositionValueCell = (p: PositionSnapshotRow): string => {
+  const v = p.notional_usd ?? p.notional_ccy ?? p.notional
+  return formatMarginWithU(v ?? undefined)
+}
+
 /** 本人持仓仅展示当前仓位：pos 数值存在且绝对值 > 0。 */
 const isLinkedCurrentPosition = (r: Record<string, unknown>): boolean => {
   const raw = pickLinkedStr(r, ['pos'])
@@ -1750,6 +1758,7 @@ const eventPnlTone = (e: PositionEventRow): PnlTone => {
                     <th>收益额</th>
                     <th>收益率</th>
                     <th>持仓量</th>
+                    <th>持仓价值</th>
                     <th>保证金</th>
                     <th>维持保证金率</th>
                     <th>开仓均价</th>
@@ -1776,6 +1785,7 @@ const eventPnlTone = (e: PositionEventRow): PnlTone => {
                     <td :class="uplCellClass(row.p.upl)">{{ formatUplUsdt(row.p.upl) }}</td>
                     <td :class="roiClassFromTone(row.tone)">{{ snapshotRoiDisplay(row.p) }}</td>
                     <td class="mono sm">{{ formatPosContractsDisplay(row.p.pos) }}</td>
+                    <td class="mono sm">{{ snapshotPositionValueCell(row.p) }}</td>
                     <td class="mono sm">{{ formatMarginWithU(row.p.margin) }}</td>
                     <td class="mono sm">{{ formatMaintMarginRatioPct(row.p.mgn_ratio) }}</td>
                     <td class="mono sm">{{ formatAvgPx(row.p.avg_px) }}</td>
