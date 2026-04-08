@@ -1591,9 +1591,23 @@ const activeSnapshotPosIdSet = computed(() => {
   return s
 })
 
+const activeSnapshotCcySet = computed(() => {
+  const s = new Set<string>()
+  for (const p of snapshotRows.value) {
+    const c = String(p.pos_ccy ?? '').trim().toUpperCase()
+    if (c) s.add(c)
+  }
+  return s
+})
+
 /** 持仓操作仅展示“对方当前仍在持仓”的仓位。 */
 const simOpsRows = computed(() =>
-  simRecordsLatestByPos.value.filter((r) => activeSnapshotPosIdSet.value.has(String(r.pos_id))),
+  simRecordsLatestByPos.value.filter((r) => {
+    const pid = String(r.pos_id ?? '').trim()
+    if (pid && activeSnapshotPosIdSet.value.has(pid)) return true
+    const c = String(r.pos_ccy ?? '').trim().toUpperCase()
+    return !!c && activeSnapshotCcySet.value.has(c)
+  }),
 )
 const simOpsShownCount = computed(() => simOpsRows.value.length)
 
