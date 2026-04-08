@@ -595,7 +595,7 @@ onMounted(() => {
     void loadList(true)
     void loadOkxApiList(true)
     void loadLinkedOkxTradeData(true)
-  }, 2000)
+  }, 500)
 })
 
 onUnmounted(() => {
