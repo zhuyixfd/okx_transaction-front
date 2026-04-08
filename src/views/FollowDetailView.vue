@@ -107,6 +107,12 @@ type PositionSnapshotPayload = {
   positions: PositionSnapshotRow[]
 }
 
+type OverviewDataPayload = {
+  unique_name: string
+  equity?: string | null
+  overview_data?: Record<string, unknown>
+}
+
 /** 模拟跟单资金记录（与后端 FollowSimRecordOut 一致，金额为字符串） */
 type FollowSimRecordRow = {
   id: number
@@ -163,6 +169,7 @@ const eventsTotal = ref(0)
 const snapshot = ref<PositionSnapshotPayload | null>(null)
 const snapshotLoading = ref(false)
 const snapshotError = ref('')
+const overviewEquity = ref<string | null>(null)
 
 const simRecords = ref<FollowSimRecordRow[]>([])
 const simLoading = ref(false)
@@ -499,6 +506,29 @@ const loadSnapshot = async (silent = false) => {
   }
 }
 
+const loadOverviewData = async (silent = false) => {
+  const un = paramUniqueName.value
+  if (!un) {
+    overviewEquity.value = null
+    return
+  }
+  try {
+    const params = new URLSearchParams({ unique_name: un })
+    const res = await fetch(`${API_BASE}/follow-accounts/overview-data?${params}`, {
+      headers: authHeaders(),
+    })
+    if (!res.ok) {
+      if (!silent) overviewEquity.value = null
+      return
+    }
+    const data = (await res.json()) as OverviewDataPayload
+    const v = data?.equity
+    overviewEquity.value = v == null || String(v).trim() === '' ? null : String(v)
+  } catch {
+    if (!silent) overviewEquity.value = null
+  }
+}
+
 const loadSimRecords = async (silent = false) => {
   const un = paramUniqueName.value
   if (!un) {
@@ -588,12 +618,14 @@ onMounted(() => {
   void loadList(false).then(() => {
     void loadEvents(false)
     void loadSnapshot(false)
+    void loadOverviewData(false)
     void loadSimRecords(false)
     void loadLinkedOkxTradeData(false)
   })
   pollTimer = setInterval(() => {
     void loadEvents(true)
     void loadSnapshot(true)
+    void loadOverviewData(true)
     void loadSimRecords(true)
     void loadList(true)
     void loadOkxApiList(true)
@@ -615,6 +647,7 @@ watch(paramUniqueName, () => {
   linkedBillsPage.value = 1
   void loadEvents(false)
   void loadSnapshot(false)
+  void loadOverviewData(false)
   void loadSimRecords(false)
   void loadLinkedOkxTradeData(false)
 })
@@ -1739,6 +1772,11 @@ const eventPnlTone = (e: PositionEventRow): PnlTone => {
                   'sim-total-pnl-neutral': snapshotHoldingsUnrealizedTone === 'neutral',
                 }"
               >{{ formatUsdt3(snapshotHoldingsUnrealizedUsdt) }}</strong>
+            </span>
+            <span class="sim-total-pill">
+              对方资产余额（USDT）<strong class="mono sim-total-pnl-val">{{
+                overviewEquity == null ? '—' : formatUsdt3(overviewEquity)
+              }}</strong>
             </span>
           </div>
           <div v-if="snapshotLoading && !snapshot" class="muted">加载快照中…</div>
