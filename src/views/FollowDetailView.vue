@@ -1600,13 +1600,24 @@ const activeSnapshotCcySet = computed(() => {
   return s
 })
 
-/** 持仓操作仅展示“对方当前仍在持仓”的仓位。 */
-const simOpsRows = computed(() =>
-  simRecordsLatestByPos.value.filter((r) => {
-    const pid = String(r.pos_id ?? '').trim()
-    if (pid && activeSnapshotPosIdSet.value.has(pid)) return true
+const latestOpenSimByCcy = computed(() => {
+  const m = new Map<string, FollowSimRecordRow>()
+  for (const r of simRecords.value) {
+    if (r.status !== 'open') continue
     const c = String(r.pos_ccy ?? '').trim().toUpperCase()
-    return !!c && activeSnapshotCcySet.value.has(c)
+    if (!c) continue
+    const prev = m.get(c)
+    if (!prev || r.id > prev.id) m.set(c, r)
+  }
+  return m
+})
+
+/** 持仓操作以“对方当前持仓”作为主表，再关联本人 open 记录。 */
+const simOpsRows = computed(() =>
+  snapshotRowsDecorated.value.map((row) => {
+    const c = String(row.p.pos_ccy ?? '').trim().toUpperCase()
+    const rec = c ? latestOpenSimByCcy.value.get(c) ?? null : null
+    return { row, rec }
   }),
 )
 const simOpsShownCount = computed(() => simOpsRows.value.length)
@@ -1938,41 +1949,48 @@ const eventPnlTone = (e: PositionEventRow): PnlTone => {
                 </thead>
                 <tbody>
                   <tr
-                    v-for="r in simOpsRows"
-                    :key="r.id"
-                    :class="rowClassFromPnlTone(simPnlTone(r))"
+                    v-for="x in simOpsRows"
+                    :key="'op-' + x.row.p.pos_id"
+                    :class="x.row.rowClass"
                   >
                     <td class="mono td-pos-id">
-                      <span
-                        v-if="r.status === 'open' && simPnlTone(r) !== 'neutral'"
-                        :class="badgeClassFromPnlTone(simPnlTone(r))"
-                      >{{ r.pos_id }}</span>
-                      <template v-else>{{ r.pos_id }}</template>
+                      <span v-if="x.row.tone !== 'neutral'" :class="x.row.badgeClass">{{ x.row.p.pos_id }}</span>
+                      <template v-else>{{ x.row.p.pos_id }}</template>
                     </td>
-                    <td>{{ r.pos_ccy ?? '—' }}</td>
-                    <td>{{ formatPosSide(r.pos_side) }}</td>
-                    <td>{{ simLeverDisplay(r) }}</td>
-                    <td class="mono sm">{{ formatUsdt3(r.stake_usdt) }}</td>
-                    <td class="mono sm">{{ r.add_position_count ?? 0 }}</td>
-                    <td class="mono sm">{{ r.reduce_position_count ?? 0 }}</td>
-                    <td class="mono sm">{{ r.add_margin_count ?? 0 }}</td>
+                    <td>{{ x.row.p.pos_ccy ?? '—' }}</td>
+                    <td>{{ formatPosSide(x.row.p.pos_side) }}</td>
+                    <td>{{ formatLever(x.row.p.lever) }}</td>
+                    <td class="mono sm">{{ formatUsdt3(x.rec?.stake_usdt ?? '0') }}</td>
+                    <td class="mono sm">{{ x.rec?.add_position_count ?? 0 }}</td>
+                    <td class="mono sm">{{ x.rec?.reduce_position_count ?? 0 }}</td>
+                    <td class="mono sm">{{ x.rec?.add_margin_count ?? 0 }}</td>
                     <td class="nowrap sm">
                       <button
+                        v-if="x.rec"
                         type="button"
                         class="btn btn-sm btn-primary"
-                        :disabled="simActionRunningId === r.id"
-                        @click="onPositionActionClick('add', r)"
+                        :disabled="simActionRunningId === x.rec.id"
+                        @click="onPositionActionClick('add', x.rec)"
                       >
-                        {{ hasLinkedPositionForRecord(r) ? '加仓' : '开仓' }}
+                        {{ hasLinkedPositionForCcy(x.row.p.pos_ccy) ? '加仓' : '开仓' }}
+                      </button>
+                      <button
+                        v-else
+                        type="button"
+                        class="btn btn-sm btn-primary"
+                        :disabled="snapshotFollowRunningPosId === x.row.p.pos_id"
+                        @click="onSnapshotFollowClick(x.row.p)"
+                      >
+                        开仓
                       </button>
                     </td>
                     <td class="nowrap sm">
                       <button
-                        v-if="hasLinkedPositionForRecord(r)"
+                        v-if="x.rec && hasLinkedPositionForCcy(x.row.p.pos_ccy)"
                         type="button"
                         class="btn btn-sm btn-warning"
-                        :disabled="r.status !== 'open' || simActionRunningId === r.id"
-                        @click="onPositionActionClick('reduce', r)"
+                        :disabled="x.rec.status !== 'open' || simActionRunningId === x.rec.id"
+                        @click="onPositionActionClick('reduce', x.rec)"
                       >
                         减仓
                       </button>
@@ -1980,11 +1998,11 @@ const eventPnlTone = (e: PositionEventRow): PnlTone => {
                     </td>
                     <td class="nowrap sm">
                       <button
-                        v-if="hasLinkedPositionForRecord(r)"
+                        v-if="x.rec && hasLinkedPositionForCcy(x.row.p.pos_ccy)"
                         type="button"
                         class="btn btn-sm btn-danger"
-                        :disabled="r.status !== 'open' || simActionRunningId === r.id"
-                        @click="onPositionActionClick('close', r)"
+                        :disabled="x.rec.status !== 'open' || simActionRunningId === x.rec.id"
+                        @click="onPositionActionClick('close', x.rec)"
                       >
                         平仓
                       </button>
@@ -1992,11 +2010,11 @@ const eventPnlTone = (e: PositionEventRow): PnlTone => {
                     </td>
                     <td class="nowrap sm">
                       <button
-                        v-if="hasLinkedPositionForRecord(r)"
+                        v-if="x.rec && hasLinkedPositionForCcy(x.row.p.pos_ccy)"
                         type="button"
                         class="btn btn-sm btn-secondary"
-                        :disabled="r.status !== 'open' || simActionRunningId === r.id"
-                        @click="onPositionActionClick('reverse', r)"
+                        :disabled="x.rec.status !== 'open' || simActionRunningId === x.rec.id"
+                        @click="onPositionActionClick('reverse', x.rec)"
                       >
                         反手
                       </button>
