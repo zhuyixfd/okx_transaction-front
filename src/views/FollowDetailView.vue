@@ -1582,7 +1582,20 @@ const simRecordsLatestByPos = computed(() => {
     return String(a.pos_id).localeCompare(String(b.pos_id), 'en', { sensitivity: 'base' })
   })
 })
-const simOpsShownCount = computed(() => simRecordsLatestByPos.value.length)
+const activeSnapshotPosIdSet = computed(() => {
+  const s = new Set<string>()
+  for (const p of snapshotRows.value) {
+    const pid = String(p.pos_id ?? '').trim()
+    if (pid) s.add(pid)
+  }
+  return s
+})
+
+/** 持仓操作仅展示“对方当前仍在持仓”的仓位。 */
+const simOpsRows = computed(() =>
+  simRecordsLatestByPos.value.filter((r) => activeSnapshotPosIdSet.value.has(String(r.pos_id))),
+)
+const simOpsShownCount = computed(() => simOpsRows.value.length)
 
 const simInvestedByCloseEventId = computed(() => {
   const m = new Map<number, string>()
@@ -1911,7 +1924,7 @@ const eventPnlTone = (e: PositionEventRow): PnlTone => {
                 </thead>
                 <tbody>
                   <tr
-                    v-for="r in simRecordsLatestByPos"
+                    v-for="r in simOpsRows"
                     :key="r.id"
                     :class="rowClassFromPnlTone(simPnlTone(r))"
                   >
