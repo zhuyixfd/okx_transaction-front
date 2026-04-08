@@ -164,7 +164,7 @@ const snapshotError = ref('')
 const simRecords = ref<FollowSimRecordRow[]>([])
 const simLoading = ref(false)
 const simError = ref('')
-const SIM_PAGE_SIZE = 20
+const SIM_PAGE_SIZE = 500
 /** 本人 OKX：成交 / 保证金账单列表分页（每表独立） */
 const LINKED_OKX_PAGE_SIZE = 10
 const simPage = ref(1)
@@ -511,11 +511,10 @@ const loadSimRecords = async (silent = false) => {
     simError.value = ''
   }
   try {
-    const offset = (simPage.value - 1) * SIM_PAGE_SIZE
     const params = new URLSearchParams({
       unique_name: un,
       limit: String(SIM_PAGE_SIZE),
-      offset: String(offset),
+      offset: '0',
     })
     const res = await fetch(`${API_BASE}/follow-accounts/follow-sim-records?${params}`, {
       headers: authHeaders(),
@@ -1583,6 +1582,7 @@ const simRecordsLatestByPos = computed(() => {
     return String(a.pos_id).localeCompare(String(b.pos_id), 'en', { sensitivity: 'base' })
   })
 })
+const simOpsShownCount = computed(() => simRecordsLatestByPos.value.length)
 
 const simInvestedByCloseEventId = computed(() => {
   const m = new Map<number, string>()
@@ -1980,31 +1980,11 @@ const eventPnlTone = (e: PositionEventRow): PnlTone => {
               </table>
               </div>
             </div>
-            <nav
-              class="mt-3 d-flex justify-content-center flex-wrap align-items-center gap-2 mb-0"
-              aria-label="模拟跟单资金分页"
-            >
-              <button
-                type="button"
-                class="btn btn-sm btn-primary"
-                :disabled="simPage <= 1 || simLoading"
-                @click="goSimPrev"
-              >
-                上一页
-              </button>
+            <div class="mt-3 d-flex justify-content-center mb-0">
               <span class="text-nowrap small text-muted">
-                第 {{ simPage }} / {{ simTotalPages }} 页，共 {{ simTotal }} 条（每页
-                {{ SIM_PAGE_SIZE }} 条）
+                当前展示 {{ simOpsShownCount }} 条（同持仓编号仅保留最新一条）
               </span>
-              <button
-                type="button"
-                class="btn btn-sm btn-primary"
-                :disabled="simPage >= simTotalPages || simLoading"
-                @click="goSimNext"
-              >
-                下一页
-              </button>
-            </nav>
+            </div>
           </template>
         </section>
 
