@@ -1837,6 +1837,53 @@ const myCloseUplClass = (e: PositionEventRow): string => {
   return uplCellClass(String(rel * invested))
 }
 
+const eventDetailField = (e: PositionEventRow, key: string): string | null => {
+  const dj = e.detail_json
+  if (!dj || !String(dj).trim()) return null
+  try {
+    const d = JSON.parse(dj)
+    if (!d || typeof d !== 'object') return null
+    const v = (d as Record<string, unknown>)[key]
+    if (v == null) return null
+    const s = String(v).trim()
+    return s === '' ? null : s
+  } catch {
+    return null
+  }
+}
+
+const eventCounterpartyRoiRaw = (e: PositionEventRow): number | null => {
+  const raw = eventDetailField(e, 'pnlRatio')
+  if (!raw) return null
+  const s = raw.replace(/%/g, '').replace(/,/g, '').trim()
+  if (!s) return null
+  const n = Number(s)
+  if (!Number.isFinite(n)) return null
+  const pct = Math.abs(n) <= 1 ? n * 100 : n
+  return pct / 100
+}
+
+const eventCounterpartyRoiDisplay = (e: PositionEventRow): string => {
+  const rel = eventCounterpartyRoiRaw(e)
+  if (rel != null) {
+    const pct = rel * 100
+    const sign = pct > 0 ? '+' : ''
+    return `${sign}${pct.toFixed(2)}%`
+  }
+  return eventRoiDisplay(e)
+}
+
+const eventCounterpartyRoiClass = (e: PositionEventRow): string => {
+  const rel = eventCounterpartyRoiRaw(e)
+  if (rel != null) {
+    const pct = rel * 100
+    if (pct > 0) return 'text-success'
+    if (pct < 0) return 'text-danger'
+    return 'text-muted'
+  }
+  return roiClassFromTone(eventPnlTone(e))
+}
+
 const myClosePosDisplay = (e: PositionEventRow): string => {
   const fill = matchedMyCloseFill(e)
   if (!fill) return '—'
@@ -2367,7 +2414,7 @@ const eventPnlTone = (e: PositionEventRow): PnlTone => {
                       <div :class="myCloseUplClass(e)">{{ myCloseUplDisplay(e) }}</div>
                     </td>
                     <td class="mono sm two-line-cell">
-                      <div :class="roiClassFromTone(eventPnlTone(e))">{{ eventRoiDisplay(e) }}</div>
+                      <div :class="eventCounterpartyRoiClass(e)">{{ eventCounterpartyRoiDisplay(e) }}</div>
                       <div :class="myCloseRoiClass(e)">{{ myCloseRoiDisplay(e) }}</div>
                     </td>
                     <td class="mono sm two-line-cell">
