@@ -2136,14 +2136,14 @@ const eventPnlTone = (e: PositionEventRow): PnlTone => {
                     <th>币种</th>
                     <th>方向</th>
                     <th>杠杆</th>
-                    <th>收益额</th>
-                    <th>收益率</th>
-                    <th>累计投入</th>
-                    <th>持仓量</th>
                     <th>开仓均价</th>
                     <th>平仓均价</th>
                     <th>开仓时间</th>
                     <th>平仓时间</th>
+                    <th>收益额</th>
+                    <th>收益率</th>
+                    <th>累计投入</th>
+                    <th>持仓量</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -2162,10 +2162,6 @@ const eventPnlTone = (e: PositionEventRow): PnlTone => {
                     <td>{{ e.pos_ccy ?? '—' }}</td>
                     <td>{{ formatPosSide(e.pos_side) }}</td>
                     <td>{{ formatLever(e.lever) }}</td>
-                    <td :class="uplCellClass(eventUplRaw(e))">{{ formatUplUsdt(eventUplRaw(e)) }}</td>
-                    <td :class="roiClassFromTone(eventPnlTone(e))">{{ eventRoiDisplay(e) }}</td>
-                    <td class="mono sm">{{ eventInvestedDisplay(e) }}</td>
-                    <td class="mono sm">{{ formatEventPosContracts(e) }}</td>
                     <td class="mono sm">{{ formatAvgPx(e.avg_px) }}</td>
                     <td
                       class="mono sm"
@@ -2173,6 +2169,10 @@ const eventPnlTone = (e: PositionEventRow): PnlTone => {
                     >{{ eventMarkPx(e) }}</td>
                     <td class="nowrap sm">{{ formatEventOpenTime(e) }}</td>
                     <td class="nowrap sm">{{ formatTime(e.created_at) }}</td>
+                    <td :class="uplCellClass(eventUplRaw(e))">{{ formatUplUsdt(eventUplRaw(e)) }}</td>
+                    <td :class="roiClassFromTone(eventPnlTone(e))">{{ eventRoiDisplay(e) }}</td>
+                    <td class="mono sm">{{ eventInvestedDisplay(e) }}</td>
+                    <td class="mono sm">{{ formatEventPosContracts(e) }}</td>
                   </tr>
                 </tbody>
               </table>
