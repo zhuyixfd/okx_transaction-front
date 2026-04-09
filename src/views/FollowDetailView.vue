@@ -215,6 +215,7 @@ const linkedBillsRows = ref<Record<string, unknown>[]>([])
 const linkedPosRows = ref<Record<string, unknown>[]>([])
 /** 跟单持仓（欧易 positions）最近一次成功拉取时间，用于「更新时间」列（与对方快照 refreshed_at 对齐语义） */
 const linkedOkxFetchedAt = ref<string | null>(null)
+const linkedAssetBalanceUsdt = ref<string | null>(null)
 const linkedOkxErr = ref('')
 /** 每次发起本人 OKX 三联请求前递增，用于丢弃慢于后一轮的过期响应，避免表格闪空 */
 const linkedOkxFetchGeneration = ref(0)
@@ -304,6 +305,7 @@ const loadLinkedOkxTradeData = async (silent = false) => {
     linkedBillsRows.value = []
     linkedPosRows.value = []
     linkedOkxFetchedAt.value = null
+    linkedAssetBalanceUsdt.value = null
     if (!silent) linkedOkxErr.value = ''
     return
   }
@@ -315,7 +317,7 @@ const loadLinkedOkxTradeData = async (silent = false) => {
   if (!silent) linkedOkxErr.value = ''
   const q = new URLSearchParams({ unique_name: un })
   try {
-    const [fRes, bRes, pRes] = await Promise.all([
+    const [fRes, bRes, pRes, aRes] = await Promise.all([
       fetch(`${API_BASE}/follow-accounts/linked-okx/fills?${q}&instType=SWAP&limit=100`, {
         headers: authHeaders(),
       }),
@@ -325,11 +327,15 @@ const loadLinkedOkxTradeData = async (silent = false) => {
       fetch(`${API_BASE}/follow-accounts/linked-okx/positions?${q}&instType=SWAP`, {
         headers: authHeaders(),
       }),
+      fetch(`${API_BASE}/follow-accounts/linked-okx/account-balance?${q}&ccy=USDT`, {
+        headers: authHeaders(),
+      }),
     ])
-    const [fj, bj, pj] = await Promise.all([
+    const [fj, bj, pj, aj] = await Promise.all([
       fRes.json().catch(() => ({})),
       bRes.json().catch(() => ({})),
       pRes.json().catch(() => ({})),
+      aRes.json().catch(() => ({})),
     ])
     if (
       gen !== linkedOkxFetchGeneration.value ||
@@ -345,12 +351,20 @@ const loadLinkedOkxTradeData = async (silent = false) => {
       linkedPosRows.value = _linkedDataArr(pRes, pj)
       linkedOkxFetchedAt.value = new Date().toISOString()
     }
+    if (aRes.ok) {
+      const data = (aj as { data?: unknown }).data
+      const first = Array.isArray(data) ? (data[0] as Record<string, unknown> | undefined) : undefined
+      const totalEq = first?.totalEq
+      linkedAssetBalanceUsdt.value =
+        totalEq == null || String(totalEq).trim() === '' ? null : String(totalEq)
+    }
     if (!silent) {
       if (!fRes.ok) linkedOkxErr.value = _linkedErrText(fRes, fj)
       else if (!bRes.ok) linkedOkxErr.value = _linkedErrText(bRes, bj)
       else if (!pRes.ok) linkedOkxErr.value = _linkedErrText(pRes, pj)
+      else if (!aRes.ok) linkedOkxErr.value = _linkedErrText(aRes, aj)
       else linkedOkxErr.value = ''
-    } else if (fRes.ok && bRes.ok && pRes.ok) {
+    } else if (fRes.ok && bRes.ok && pRes.ok && aRes.ok) {
       linkedOkxErr.value = ''
     }
   } catch (e: unknown) {
@@ -1898,6 +1912,11 @@ const eventPnlTone = (e: PositionEventRow): PnlTone => {
                   'sim-total-pnl-neutral': linkedHoldingsUnrealizedTone === 'neutral',
                 }"
               >{{ formatUsdt3(linkedHoldingsUnrealizedUsdt) }}</strong>
+            </span>
+            <span class="sim-total-pill">
+              我的资产余额（USDT）<strong class="mono sim-total-pnl-val">{{
+                linkedAssetBalanceUsdt == null ? '—' : formatUsdt3(linkedAssetBalanceUsdt)
+              }}</strong>
             </span>
           </div>
           <div v-if="!current?.okx_api_account_id" class="muted mb-0">
