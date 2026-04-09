@@ -323,8 +323,8 @@ const loadLinkedOkxTradeData = async (silent = false) => {
   const q = new URLSearchParams({ unique_name: un })
   try {
     const nowMs = Date.now()
-    const needFillsBillsFetch = !silent || nowMs - linkedFillsBillsFetchedAtMs >= 2000
-    const needBalFetch = !silent || nowMs - linkedAssetBalanceFetchedAtMs >= 2000
+    const needFillsBillsFetch = !silent || nowMs - linkedFillsBillsFetchedAtMs >= 800
+    const needBalFetch = !silent || nowMs - linkedAssetBalanceFetchedAtMs >= 800
     const [fRes, bRes, pRes, aRes] = await Promise.all([
       needFillsBillsFetch
         ? fetch(`${API_BASE}/follow-accounts/linked-okx/fills?${q}&instType=SWAP&limit=100`, {
@@ -664,7 +664,7 @@ onMounted(() => {
     void loadList(true)
     void loadOkxApiList(true)
     void loadLinkedOkxTradeData(true)
-  }, 500)
+  }, 800)
 })
 
 onUnmounted(() => {
