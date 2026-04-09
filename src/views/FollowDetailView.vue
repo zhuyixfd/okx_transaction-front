@@ -1705,6 +1705,108 @@ const eventInvestedDisplay = (e: PositionEventRow): string => {
   return v == null ? '—' : formatUsdt3(v)
 }
 
+const eventInvestedRaw = (e: PositionEventRow): number | null => {
+  const v = simInvestedByCloseEventId.value.get(e.id)
+  if (v == null) return null
+  const n = Number(String(v).trim())
+  return Number.isFinite(n) ? n : null
+}
+
+const parseLinkedTsMs = (raw: unknown): number | null => {
+  if (raw == null) return null
+  const s = String(raw).trim()
+  if (!s) return null
+  const n = Number(s)
+  if (Number.isFinite(n)) {
+    if (n >= 1e12) return Math.floor(n)
+    if (n >= 1e9) return Math.floor(n * 1000)
+  }
+  const isoMs = Date.parse(s)
+  return Number.isFinite(isoMs) ? isoMs : null
+}
+
+const eventCloseTsMs = (e: PositionEventRow): number | null => {
+  const ms = parseLinkedTsMs(e.created_at)
+  return ms
+}
+
+const expectedCloseSide = (posSide: string | null | undefined): string | null => {
+  const ps = String(posSide ?? '').trim().toLowerCase()
+  if (ps === 'long') return 'sell'
+  if (ps === 'short') return 'buy'
+  return null
+}
+
+const matchedMyCloseFill = (e: PositionEventRow): Record<string, unknown> | null => {
+  const ccy = String(e.pos_ccy ?? '').trim().toUpperCase()
+  const t0 = eventCloseTsMs(e)
+  if (!ccy || t0 == null) return null
+  const wantSide = expectedCloseSide(e.pos_side)
+  let picked: Record<string, unknown> | null = null
+  let best = Number.POSITIVE_INFINITY
+  for (const r of linkedFillsRows.value) {
+    const fillCcy = instIdBaseCcy(pickLinkedStr(r, ['instId'])).toUpperCase()
+    if (!fillCcy || fillCcy === '—' || fillCcy !== ccy) continue
+    const side = String(pickLinkedStr(r, ['side'])).trim().toLowerCase()
+    if (wantSide && side !== '—' && side !== wantSide) continue
+    const t = parseLinkedTsMs(pickLinkedStr(r, ['fillTime', 'ts']))
+    if (t == null) continue
+    const dt = Math.abs(t - t0)
+    if (dt > 1000) continue
+    if (dt < best) {
+      best = dt
+      picked = r
+    }
+  }
+  return picked
+}
+
+const myCloseRoiRaw = (e: PositionEventRow): number | null => {
+  const fill = matchedMyCloseFill(e)
+  if (!fill) return null
+  const avg = Number(String(e.avg_px ?? '').trim())
+  const px = Number(String(pickLinkedStr(fill, ['fillPx', 'px'])).trim())
+  if (!Number.isFinite(avg) || !Number.isFinite(px) || avg === 0) return null
+  const side = String(e.pos_side ?? '').trim().toLowerCase()
+  const rel = side === 'short' ? (avg - px) / avg : (px - avg) / avg
+  return Number.isFinite(rel) ? rel : null
+}
+
+const myCloseRoiDisplay = (e: PositionEventRow): string => {
+  const rel = myCloseRoiRaw(e)
+  if (rel == null) return '—'
+  const pct = rel * 100
+  const sign = pct > 0 ? '+' : ''
+  return `${sign}${pct.toFixed(2)}%`
+}
+
+const myCloseRoiClass = (e: PositionEventRow): string => {
+  const rel = myCloseRoiRaw(e)
+  if (rel == null) return 'mono sm text-muted'
+  return roiClassFromTone(toneFromNumber(rel))
+}
+
+const myCloseUplDisplay = (e: PositionEventRow): string => {
+  const rel = myCloseRoiRaw(e)
+  const invested = eventInvestedRaw(e)
+  if (rel == null || invested == null) return '—'
+  return formatUsdt3(rel * invested)
+}
+
+const myCloseUplClass = (e: PositionEventRow): string => {
+  const rel = myCloseRoiRaw(e)
+  const invested = eventInvestedRaw(e)
+  if (rel == null || invested == null) return 'mono sm text-muted'
+  return uplCellClass(String(rel * invested))
+}
+
+const myClosePosDisplay = (e: PositionEventRow): string => {
+  const fill = matchedMyCloseFill(e)
+  if (!fill) return '—'
+  const sz = pickLinkedStr(fill, ['fillSz', 'sz'])
+  return sz === '—' ? '—' : `${sz}张`
+}
+
 const eventCurrentUplDisplay = (e: PositionEventRow): string => {
   const pid = e.pos_id
   if (!pid) return '—'
@@ -2209,11 +2311,11 @@ const eventPnlTone = (e: PositionEventRow): PnlTone => {
                     <td class="nowrap sm">{{ formatTime(e.created_at) }}</td>
                     <td class="mono sm two-line-cell">
                       <div :class="uplCellClass(eventUplRaw(e))">{{ formatUplUsdt(eventUplRaw(e)) }}</div>
-                      <div class="text-muted">—</div>
+                      <div :class="myCloseUplClass(e)">{{ myCloseUplDisplay(e) }}</div>
                     </td>
                     <td class="mono sm two-line-cell">
                       <div :class="roiClassFromTone(eventPnlTone(e))">{{ eventRoiDisplay(e) }}</div>
-                      <div class="text-muted">—</div>
+                      <div :class="myCloseRoiClass(e)">{{ myCloseRoiDisplay(e) }}</div>
                     </td>
                     <td class="mono sm two-line-cell">
                       <div>{{ eventInvestedDisplay(e) }}</div>
@@ -2221,7 +2323,7 @@ const eventPnlTone = (e: PositionEventRow): PnlTone => {
                     </td>
                     <td class="mono sm two-line-cell">
                       <div>{{ formatEventPosContracts(e) }}</div>
-                      <div class="text-muted">—</div>
+                      <div>{{ myClosePosDisplay(e) }}</div>
                     </td>
                   </tr>
                 </tbody>
