@@ -2207,19 +2207,19 @@ const eventPnlTone = (e: PositionEventRow): PnlTone => {
                     >{{ eventMarkPx(e) }}</td>
                     <td class="nowrap sm">{{ formatEventOpenTime(e) }}</td>
                     <td class="nowrap sm">{{ formatTime(e.created_at) }}</td>
-                    <td class="mono sm">
+                    <td class="mono sm two-line-cell">
                       <div :class="eventCurrentUplClass(e)">{{ eventCurrentUplDisplay(e) }}</div>
                       <div :class="uplCellClass(eventUplRaw(e))">{{ formatUplUsdt(eventUplRaw(e)) }}</div>
                     </td>
-                    <td class="mono sm">
+                    <td class="mono sm two-line-cell">
                       <div :class="eventCurrentRoiClass(e)">{{ eventCurrentRoiDisplay(e) }}</div>
                       <div :class="roiClassFromTone(eventPnlTone(e))">{{ eventRoiDisplay(e) }}</div>
                     </td>
-                    <td class="mono sm">
+                    <td class="mono sm two-line-cell">
                       <div class="text-muted">—</div>
                       <div>{{ eventInvestedDisplay(e) }}</div>
                     </td>
-                    <td class="mono sm">
+                    <td class="mono sm two-line-cell">
                       <div>{{ eventCurrentPosContracts(e) }}</div>
                       <div>{{ formatEventPosContracts(e) }}</div>
                     </td>
@@ -3098,5 +3098,14 @@ const eventPnlTone = (e: PositionEventRow): PnlTone => {
 .events-card .table > tbody > tr > td {
   border-top: 1px solid #aeb6c2 !important;
   border-bottom: 1px solid #aeb6c2 !important;
+}
+
+/* 双行单元格：两行中间增加一条横线 */
+.events-card .two-line-cell > div {
+  padding: 2px 0;
+}
+
+.events-card .two-line-cell > div + div {
+  border-top: 1px solid #aeb6c2;
 }
 </style>
