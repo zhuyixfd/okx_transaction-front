@@ -3079,4 +3079,13 @@ const eventPnlTone = (e: PositionEventRow): PnlTone => {
 .table-pos-aligned td:nth-child(4) {
   min-width: 3rem;
 }
+
+/* 跟单记录：外框与单元格边框加深，便于两行数据阅读 */
+.events-card .detail-table-rounded {
+  border: 1px solid #9aa4b2;
+}
+
+.events-card .table > :not(caption) > * > * {
+  border-color: #aeb6c2 !important;
+}
 </style>
