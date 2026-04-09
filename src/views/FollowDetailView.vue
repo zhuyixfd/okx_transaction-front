@@ -1790,6 +1790,22 @@ const myCloseRoiRaw = (e: PositionEventRow): number | null => {
 
 const myCloseRoiDisplay = (e: PositionEventRow): string => {
   const rel = myCloseRoiRaw(e)
+  const fill = matchedMyCloseFill(e)
+  if (fill) {
+    const raw = pickLinkedStr(fill, ['pnlRatio'])
+    if (raw !== '—') {
+      const s = String(raw).trim()
+      if (s.includes('%')) return s
+      const n = Number(s.replace(/,/g, ''))
+      if (Number.isFinite(n)) {
+        // 欧易常见两种口径：0.12=12% 或 12=12%
+        const pct = Math.abs(n) <= 1 ? n * 100 : n
+        const sign = pct > 0 ? '+' : ''
+        return `${sign}${pct.toFixed(2)}%`
+      }
+      return s
+    }
+  }
   if (rel == null) return '—'
   const pct = rel * 100
   const sign = pct > 0 ? '+' : ''
@@ -1803,6 +1819,11 @@ const myCloseRoiClass = (e: PositionEventRow): string => {
 }
 
 const myCloseUplDisplay = (e: PositionEventRow): string => {
+  const fill = matchedMyCloseFill(e)
+  if (fill) {
+    const rp = pickLinkedStr(fill, ['realizedPnl'])
+    if (rp !== '—') return formatUsdt3(rp)
+  }
   const rel = myCloseRoiRaw(e)
   const invested = eventInvestedRaw(e)
   if (rel == null || invested == null) return '—'
