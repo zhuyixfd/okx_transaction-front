@@ -2024,7 +2024,10 @@ const myClosedNotionalDisplay = (e: PositionEventRow): string => {
   const his = matchedMyCloseHistory(e)
   if (his) {
     const closeTotalPos = Number(String(pickLinkedStr(his, ['closeTotalPos', 'closeAmount'])).trim().replace(/,/g, ''))
-    const closeAvgPx = Number(String(pickLinkedStr(his, ['closeAvgPx'])).trim().replace(/,/g, ''))
+    // 与“最大持仓量”保持同口径：优先按开仓均价折算名义价值
+    const closeAvgPx = Number(
+      String(pickLinkedStr(his, ['openAvgPx', 'closeAvgPx'])).trim().replace(/,/g, ''),
+    )
     const ctVal = Number(
       String(
         pickLinkedStr(his, ['ctVal']) !== '—'
