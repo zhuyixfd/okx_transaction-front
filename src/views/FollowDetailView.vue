@@ -3088,4 +3088,15 @@ const eventPnlTone = (e: PositionEventRow): PnlTone => {
 .events-card .table > :not(caption) > * > * {
   border-color: #aeb6c2 !important;
 }
+
+/* 明确显示横向分隔线（thead/tbody 每行） */
+.events-card .table > thead > tr > th {
+  border-top: 1px solid #aeb6c2 !important;
+  border-bottom: 1px solid #aeb6c2 !important;
+}
+
+.events-card .table > tbody > tr > td {
+  border-top: 1px solid #aeb6c2 !important;
+  border-bottom: 1px solid #aeb6c2 !important;
+}
 </style>
