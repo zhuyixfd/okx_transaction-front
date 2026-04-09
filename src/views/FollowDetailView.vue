@@ -1765,6 +1765,10 @@ const eventCloseTsMs = (e: PositionEventRow): number | null => {
   return ms
 }
 
+const eventOpenTsMs = (e: PositionEventRow): number | null => {
+  return parseLinkedTsMs(e.c_time)
+}
+
 const expectedCloseSide = (posSide: string | null | undefined): string | null => {
   const ps = String(posSide ?? '').trim().toLowerCase()
   if (ps === 'long') return 'sell'
@@ -1800,23 +1804,33 @@ const parseMyHistoryTsMs = (r: Record<string, unknown>): number | null => {
   return parseLinkedTsMs(pickLinkedStr(r, ['uTime', 'cTime', 'ts']))
 }
 
+const parseMyHistoryOpenTsMs = (r: Record<string, unknown>): number | null => {
+  return parseLinkedTsMs(pickLinkedStr(r, ['cTime', 'ts']))
+}
+
 const myHistoryInstBaseCcy = (r: Record<string, unknown>): string => {
   return instIdBaseCcy(pickLinkedStr(r, ['instId'])).toUpperCase()
 }
 
 const matchedMyCloseHistory = (e: PositionEventRow): Record<string, unknown> | null => {
   const ccy = String(e.pos_ccy ?? '').trim().toUpperCase()
-  const t0 = eventCloseTsMs(e)
-  if (!ccy || t0 == null) return null
+  const tClose = eventCloseTsMs(e)
+  const tOpen = eventOpenTsMs(e)
+  if (!ccy || (tClose == null && tOpen == null)) return null
+  const wantSide = String(e.pos_side ?? '').trim().toLowerCase()
   let picked: Record<string, unknown> | null = null
   let best = Number.POSITIVE_INFINITY
   for (const r of linkedPosHistoryRows.value) {
     const hCcy = myHistoryInstBaseCcy(r)
     if (!hCcy || hCcy === '—' || hCcy !== ccy) continue
-    const t = parseMyHistoryTsMs(r)
-    if (t == null) continue
-    const dt = Math.abs(t - t0)
-    if (dt > 2000) continue
+    const side = String(pickLinkedStr(r, ['posSide', 'direction'])).trim().toLowerCase()
+    if (wantSide && side && side !== '—' && side !== wantSide) continue
+    const htClose = parseMyHistoryTsMs(r)
+    const htOpen = parseMyHistoryOpenTsMs(r)
+    const dtClose = tClose != null && htClose != null ? Math.abs(htClose - tClose) : Number.POSITIVE_INFINITY
+    const dtOpen = tOpen != null && htOpen != null ? Math.abs(htOpen - tOpen) : Number.POSITIVE_INFINITY
+    const dt = Math.min(dtClose, dtOpen)
+    if (!Number.isFinite(dt) || dt > 2000) continue
     if (dt < best) {
       best = dt
       picked = r
@@ -2008,12 +2022,7 @@ const myClosedNotionalDisplay = (e: PositionEventRow): string => {
       return formatUsdt3(Math.abs(closeTotalPos * closeAvgPx * ctVal))
     }
   }
-  const fill = matchedMyCloseFill(e)
-  if (!fill) return '—'
-  const px = Number(String(pickLinkedStr(fill, ['fillPx', 'px'])).trim().replace(/,/g, ''))
-  const sz = Number(String(pickLinkedStr(fill, ['fillSz', 'sz'])).trim().replace(/,/g, ''))
-  if (!Number.isFinite(px) || !Number.isFinite(sz)) return '—'
-  return formatUsdt3(Math.abs(px * sz))
+  return '—'
 }
 
 const eventCurrentUplDisplay = (e: PositionEventRow): string => {
