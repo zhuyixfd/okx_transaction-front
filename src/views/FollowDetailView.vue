@@ -474,7 +474,7 @@ const loadEvents = async (silent = false) => {
       limit: String(EVENTS_PAGE_SIZE),
       offset: String(offset),
     })
-    const res = await fetch(`${API_BASE}/follow-accounts/position-events?${params}`, {
+    const res = await fetch(`${API_BASE}/follow-accounts/position-history-events?${params}`, {
       headers: authHeaders(),
     })
     if (!res.ok) {
