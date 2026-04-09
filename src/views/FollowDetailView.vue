@@ -26,6 +26,7 @@ type FollowRow = {
   stop_loss_ratio?: number | string | null
   okx_api_account_id?: number | null
   live_trading_enabled?: boolean
+  open_by_asset_ratio?: boolean
 }
 
 type OkxApiListRow = {
@@ -53,6 +54,8 @@ type FollowCfgForm = {
   stop_loss_ratio: number | null
   /** true：真实交易（欧易私有接口）；false：仅模拟 */
   live_trading_enabled: boolean
+  /** true：按资产比例开仓；false：按固定下注金额开仓 */
+  open_by_asset_ratio: boolean
 }
 
 type PositionEventRow = {
@@ -194,6 +197,7 @@ const followCfg = ref<FollowCfgForm>({
   take_profit_ratio: null,
   stop_loss_ratio: null,
   live_trading_enabled: false,
+  open_by_asset_ratio: false,
 })
 const configSaving = ref(false)
 const configMsg = ref('')
@@ -1002,6 +1006,7 @@ const syncFollowCfgFromCurrent = () => {
     take_profit_ratio: parseNum(c.take_profit_ratio),
     stop_loss_ratio: parseNum(c.stop_loss_ratio),
     live_trading_enabled: Boolean(c.live_trading_enabled),
+    open_by_asset_ratio: Boolean(c.open_by_asset_ratio),
   }
 }
 
@@ -1064,6 +1069,7 @@ const saveFollowConfig = async () => {
         take_profit_ratio: followCfg.value.take_profit_ratio,
         stop_loss_ratio: followCfg.value.stop_loss_ratio,
         live_trading_enabled: followCfg.value.live_trading_enabled,
+        open_by_asset_ratio: followCfg.value.open_by_asset_ratio,
       }),
     })
     const data = (await res.json().catch(() => ({}))) as { detail?: string }
@@ -2417,6 +2423,17 @@ const eventPnlTone = (e: PositionEventRow): PnlTone => {
                       type="checkbox"
                     />
                     <label class="form-check-label" for="fc-live-trading">启用真实交易</label>
+                  </div>
+                  <div class="form-check mb-3">
+                    <input
+                      id="fc-open-by-asset-ratio"
+                      v-model="followCfg.open_by_asset_ratio"
+                      class="form-check-input"
+                      type="checkbox"
+                    />
+                    <label class="form-check-label" for="fc-open-by-asset-ratio">
+                      按资产比例开仓
+                    </label>
                   </div>
                   <div class="mb-2">
                     <label
