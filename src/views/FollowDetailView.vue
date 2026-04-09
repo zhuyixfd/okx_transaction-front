@@ -74,6 +74,9 @@ type PositionEventRow = {
   /** 来自接口 upl（USDT），未平仓行前端用快照覆盖 */
   upl?: string | null
   pos?: string | null
+  notional_usd?: string | null
+  notional_ccy?: string | null
+  notional?: string | null
   margin?: string | null
   mgn_ratio?: string | null
   liq_px?: string | null
@@ -1807,6 +1810,24 @@ const myClosePosDisplay = (e: PositionEventRow): string => {
   return sz === '—' ? '—' : `${sz}张`
 }
 
+const eventCloseNotionalDisplay = (e: PositionEventRow): string => {
+  const n0 = e.notional_usd ?? e.notional ?? e.notional_ccy
+  if (n0 != null && String(n0).trim() !== '') return formatUsdt3(n0)
+  const pos = Number(String(e.pos ?? '').trim().replace(/,/g, ''))
+  const px = Number(String(e.last_px ?? '').trim().replace(/,/g, ''))
+  if (!Number.isFinite(pos) || !Number.isFinite(px)) return '—'
+  return formatUsdt3(Math.abs(pos * px))
+}
+
+const myCloseNotionalDisplay = (e: PositionEventRow): string => {
+  const fill = matchedMyCloseFill(e)
+  if (!fill) return '—'
+  const px = Number(String(pickLinkedStr(fill, ['fillPx', 'px'])).trim().replace(/,/g, ''))
+  const sz = Number(String(pickLinkedStr(fill, ['fillSz', 'sz'])).trim().replace(/,/g, ''))
+  if (!Number.isFinite(px) || !Number.isFinite(sz)) return '—'
+  return formatUsdt3(Math.abs(px * sz))
+}
+
 const eventCurrentUplDisplay = (e: PositionEventRow): string => {
   const pid = e.pos_id
   if (!pid) return '—'
@@ -2282,7 +2303,7 @@ const eventPnlTone = (e: PositionEventRow): PnlTone => {
                     <th>平仓时间</th>
                     <th>收益额</th>
                     <th>收益率</th>
-                    <th>累计投入</th>
+                    <th>持仓价值</th>
                     <th>持仓量</th>
                   </tr>
                 </thead>
@@ -2318,8 +2339,8 @@ const eventPnlTone = (e: PositionEventRow): PnlTone => {
                       <div :class="myCloseRoiClass(e)">{{ myCloseRoiDisplay(e) }}</div>
                     </td>
                     <td class="mono sm two-line-cell">
-                      <div>{{ eventInvestedDisplay(e) }}</div>
-                      <div class="text-muted">—</div>
+                      <div>{{ eventCloseNotionalDisplay(e) }}</div>
+                      <div>{{ myCloseNotionalDisplay(e) }}</div>
                     </td>
                     <td class="mono sm two-line-cell">
                       <div>{{ formatEventPosContracts(e) }}</div>
