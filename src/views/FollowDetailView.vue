@@ -219,6 +219,7 @@ const linkedPosRows = ref<Record<string, unknown>[]>([])
 /** 跟单持仓（欧易 positions）最近一次成功拉取时间，用于「更新时间」列（与对方快照 refreshed_at 对齐语义） */
 const linkedOkxFetchedAt = ref<string | null>(null)
 const linkedAssetBalanceUsdt = ref<string | null>(null)
+let linkedFillsBillsFetchedAtMs = 0
 let linkedAssetBalanceFetchedAtMs = 0
 const linkedOkxErr = ref('')
 /** 每次发起本人 OKX 三联请求前递增，用于丢弃慢于后一轮的过期响应，避免表格闪空 */
@@ -321,14 +322,20 @@ const loadLinkedOkxTradeData = async (silent = false) => {
   if (!silent) linkedOkxErr.value = ''
   const q = new URLSearchParams({ unique_name: un })
   try {
-    const needBalFetch = !silent || Date.now() - linkedAssetBalanceFetchedAtMs >= 2000
+    const nowMs = Date.now()
+    const needFillsBillsFetch = !silent || nowMs - linkedFillsBillsFetchedAtMs >= 2000
+    const needBalFetch = !silent || nowMs - linkedAssetBalanceFetchedAtMs >= 2000
     const [fRes, bRes, pRes, aRes] = await Promise.all([
-      fetch(`${API_BASE}/follow-accounts/linked-okx/fills?${q}&instType=SWAP&limit=100`, {
-        headers: authHeaders(),
-      }),
-      fetch(`${API_BASE}/follow-accounts/linked-okx/margin-bills?${q}&instType=SWAP&limit=100`, {
-        headers: authHeaders(),
-      }),
+      needFillsBillsFetch
+        ? fetch(`${API_BASE}/follow-accounts/linked-okx/fills?${q}&instType=SWAP&limit=100`, {
+            headers: authHeaders(),
+          })
+        : Promise.resolve(new Response(JSON.stringify({}), { status: 204 })),
+      needFillsBillsFetch
+        ? fetch(`${API_BASE}/follow-accounts/linked-okx/margin-bills?${q}&instType=SWAP&limit=100`, {
+            headers: authHeaders(),
+          })
+        : Promise.resolve(new Response(JSON.stringify({}), { status: 204 })),
       fetch(`${API_BASE}/follow-accounts/linked-okx/positions?${q}&instType=SWAP`, {
         headers: authHeaders(),
       }),
@@ -354,6 +361,7 @@ const loadLinkedOkxTradeData = async (silent = false) => {
     // 仅成功响应覆盖列表；失败或 502 保留上一轮数据，避免「我的持仓」闪空
     if (fRes.ok) linkedFillsRows.value = _linkedDataArr(fRes, fj)
     if (bRes.ok) linkedBillsRows.value = _linkedDataArr(bRes, bj)
+    if (fRes.ok || bRes.ok) linkedFillsBillsFetchedAtMs = Date.now()
     if (pRes.ok) {
       linkedPosRows.value = _linkedDataArr(pRes, pj)
       linkedOkxFetchedAt.value = new Date().toISOString()
@@ -372,7 +380,7 @@ const loadLinkedOkxTradeData = async (silent = false) => {
       else if (!pRes.ok) linkedOkxErr.value = _linkedErrText(pRes, pj)
       else if (!aRes.ok) linkedOkxErr.value = _linkedErrText(aRes, aj)
       else linkedOkxErr.value = ''
-    } else if (fRes.ok && bRes.ok && pRes.ok && aRes.ok) {
+    } else if ((fRes.ok || fRes.status === 204) && (bRes.ok || bRes.status === 204) && pRes.ok && (aRes.ok || aRes.status === 204)) {
       linkedOkxErr.value = ''
     }
   } catch (e: unknown) {
