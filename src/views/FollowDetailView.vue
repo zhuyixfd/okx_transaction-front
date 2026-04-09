@@ -1900,6 +1900,33 @@ const eventCloseNotionalDisplay = (e: PositionEventRow): string => {
   return formatUsdt3(Math.abs(pos * px))
 }
 
+const eventMaxNotionalUsdtDisplay = (e: PositionEventRow): string => {
+  const openMaxAmountS = eventDetailField(e, 'openMaxAmount')
+  const openAvgPxS = eventDetailField(e, 'openAvgPx') ?? eventDetailField(e, 'avgPx')
+  const ctValS = eventDetailField(e, 'ctVal')
+  const openMaxAmount = Number(String(openMaxAmountS ?? '').trim().replace(/,/g, ''))
+  const openAvgPx = Number(String(openAvgPxS ?? '').trim().replace(/,/g, ''))
+  const ctVal = Number(String(ctValS ?? '').trim().replace(/,/g, ''))
+  if (Number.isFinite(openMaxAmount) && Number.isFinite(openAvgPx) && Number.isFinite(ctVal)) {
+    return formatUsdt3(Math.abs(openMaxAmount * openAvgPx * ctVal))
+  }
+  // 兜底：缺字段时回退到已有 notional 口径
+  return eventCloseNotionalDisplay(e)
+}
+
+const eventClosedNotionalUsdtDisplay = (e: PositionEventRow): string => {
+  const closeAmountS = eventDetailField(e, 'closeAmount')
+  const closeAvgPxS = eventDetailField(e, 'closeAvgPx') ?? e.last_px
+  const ctValS = eventDetailField(e, 'ctVal')
+  const closeAmount = Number(String(closeAmountS ?? '').trim().replace(/,/g, ''))
+  const closeAvgPx = Number(String(closeAvgPxS ?? '').trim().replace(/,/g, ''))
+  const ctVal = Number(String(ctValS ?? '').trim().replace(/,/g, ''))
+  if (Number.isFinite(closeAmount) && Number.isFinite(closeAvgPx) && Number.isFinite(ctVal)) {
+    return formatUsdt3(Math.abs(closeAmount * closeAvgPx * ctVal))
+  }
+  return eventCloseNotionalDisplay(e)
+}
+
 const myCloseNotionalDisplay = (e: PositionEventRow): string => {
   const fill = matchedMyCloseFill(e)
   if (!fill) return '—'
@@ -2418,11 +2445,11 @@ const eventPnlTone = (e: PositionEventRow): PnlTone => {
                       <div :class="myCloseRoiClass(e)">{{ myCloseRoiDisplay(e) }}</div>
                     </td>
                     <td class="mono sm two-line-cell">
-                      <div>{{ eventCloseNotionalDisplay(e) }}</div>
+                      <div>{{ eventMaxNotionalUsdtDisplay(e) }}</div>
                       <div>{{ myCloseNotionalDisplay(e) }}</div>
                     </td>
                     <td class="mono sm two-line-cell">
-                      <div>{{ formatEventPosContracts(e) }}</div>
+                      <div>{{ eventClosedNotionalUsdtDisplay(e) }}</div>
                       <div>{{ myClosePosDisplay(e) }}</div>
                     </td>
                     <td class="nowrap sm">{{ formatEventOpenTime(e) }}</td>
