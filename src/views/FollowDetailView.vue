@@ -2312,10 +2312,10 @@ const eventPnlTone = (e: PositionEventRow): PnlTone => {
                     <th>杠杆</th>
                     <th>开仓均价</th>
                     <th>平仓均价</th>
-                    <th>收益额</th>
-                    <th>收益率</th>
-                    <th>持仓价值</th>
-                    <th>持仓量</th>
+                    <th>已实现收益额</th>
+                    <th>已实现收益率</th>
+                    <th>最大持仓量</th>
+                    <th>已平仓量</th>
                     <th>开仓时间</th>
                     <th>平仓时间</th>
                   </tr>
