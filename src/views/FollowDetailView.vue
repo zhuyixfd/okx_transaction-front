@@ -2004,7 +2004,15 @@ const myMaxNotionalDisplay = (e: PositionEventRow): string => {
   if (his) {
     const openMaxPos = Number(String(pickLinkedStr(his, ['openMaxPos', 'openMaxAmount'])).trim().replace(/,/g, ''))
     const openAvgPx = Number(String(pickLinkedStr(his, ['openAvgPx'])).trim().replace(/,/g, ''))
-    const ctVal = Number(String(pickLinkedStr(his, ['ctVal'])).trim().replace(/,/g, ''))
+    const ctVal = Number(
+      String(
+        pickLinkedStr(his, ['ctVal']) !== '—'
+          ? pickLinkedStr(his, ['ctVal'])
+          : (eventDetailField(e, 'ctVal') ?? ''),
+      )
+        .trim()
+        .replace(/,/g, ''),
+    )
     if (Number.isFinite(openMaxPos) && Number.isFinite(openAvgPx) && Number.isFinite(ctVal)) {
       return formatUsdt3(Math.abs(openMaxPos * openAvgPx * ctVal))
     }
@@ -2017,7 +2025,15 @@ const myClosedNotionalDisplay = (e: PositionEventRow): string => {
   if (his) {
     const closeTotalPos = Number(String(pickLinkedStr(his, ['closeTotalPos', 'closeAmount'])).trim().replace(/,/g, ''))
     const closeAvgPx = Number(String(pickLinkedStr(his, ['closeAvgPx'])).trim().replace(/,/g, ''))
-    const ctVal = Number(String(pickLinkedStr(his, ['ctVal'])).trim().replace(/,/g, ''))
+    const ctVal = Number(
+      String(
+        pickLinkedStr(his, ['ctVal']) !== '—'
+          ? pickLinkedStr(his, ['ctVal'])
+          : (eventDetailField(e, 'ctVal') ?? ''),
+      )
+        .trim()
+        .replace(/,/g, ''),
+    )
     if (Number.isFinite(closeTotalPos) && Number.isFinite(closeAvgPx) && Number.isFinite(ctVal)) {
       return formatUsdt3(Math.abs(closeTotalPos * closeAvgPx * ctVal))
     }
