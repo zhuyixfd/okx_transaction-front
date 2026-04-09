@@ -1705,6 +1705,44 @@ const eventInvestedDisplay = (e: PositionEventRow): string => {
   return v == null ? '—' : formatUsdt3(v)
 }
 
+const eventCurrentUplDisplay = (e: PositionEventRow): string => {
+  const pid = e.pos_id
+  if (!pid) return '—'
+  const live = snapshotByPosId.value.get(pid)?.upl
+  return formatUplUsdt(live == null ? null : String(live))
+}
+
+const eventCurrentUplClass = (e: PositionEventRow): string => {
+  const pid = e.pos_id
+  if (!pid) return 'mono sm text-muted'
+  const live = snapshotByPosId.value.get(pid)?.upl
+  return uplCellClass(live == null ? null : String(live))
+}
+
+const eventCurrentRoiDisplay = (e: PositionEventRow): string => {
+  const pid = e.pos_id
+  if (!pid) return '—'
+  const snap = snapshotByPosId.value.get(pid)
+  if (!snap) return '—'
+  return snapshotRoiDisplay(snap)
+}
+
+const eventCurrentRoiClass = (e: PositionEventRow): string => {
+  const pid = e.pos_id
+  if (!pid) return 'mono sm text-muted'
+  const snap = snapshotByPosId.value.get(pid)
+  if (!snap) return 'mono sm text-muted'
+  const tone = pnlToneFromAvgMark(snap.avg_px, snap.last_px, snap.pos_side)
+  return roiClassFromTone(tone)
+}
+
+const eventCurrentPosContracts = (e: PositionEventRow): string => {
+  const pid = e.pos_id
+  if (!pid) return '—'
+  const snap = snapshotByPosId.value.get(pid)
+  return snap ? formatPosContractsDisplay(snap.pos) : '—'
+}
+
 /** 跟单记录仅展示已平仓事件（close），隐藏正在持仓。 */
 const closedEventsOnly = computed(() => events.value.filter((e) => e.event_type === 'close'))
 
@@ -2169,10 +2207,22 @@ const eventPnlTone = (e: PositionEventRow): PnlTone => {
                     >{{ eventMarkPx(e) }}</td>
                     <td class="nowrap sm">{{ formatEventOpenTime(e) }}</td>
                     <td class="nowrap sm">{{ formatTime(e.created_at) }}</td>
-                    <td :class="uplCellClass(eventUplRaw(e))">{{ formatUplUsdt(eventUplRaw(e)) }}</td>
-                    <td :class="roiClassFromTone(eventPnlTone(e))">{{ eventRoiDisplay(e) }}</td>
-                    <td class="mono sm">{{ eventInvestedDisplay(e) }}</td>
-                    <td class="mono sm">{{ formatEventPosContracts(e) }}</td>
+                    <td class="mono sm">
+                      <div :class="eventCurrentUplClass(e)">{{ eventCurrentUplDisplay(e) }}</div>
+                      <div :class="uplCellClass(eventUplRaw(e))">{{ formatUplUsdt(eventUplRaw(e)) }}</div>
+                    </td>
+                    <td class="mono sm">
+                      <div :class="eventCurrentRoiClass(e)">{{ eventCurrentRoiDisplay(e) }}</div>
+                      <div :class="roiClassFromTone(eventPnlTone(e))">{{ eventRoiDisplay(e) }}</div>
+                    </td>
+                    <td class="mono sm">
+                      <div class="text-muted">—</div>
+                      <div>{{ eventInvestedDisplay(e) }}</div>
+                    </td>
+                    <td class="mono sm">
+                      <div>{{ eventCurrentPosContracts(e) }}</div>
+                      <div>{{ formatEventPosContracts(e) }}</div>
+                    </td>
                   </tr>
                 </tbody>
               </table>
