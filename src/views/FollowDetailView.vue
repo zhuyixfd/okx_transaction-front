@@ -216,6 +216,7 @@ const okxBindSaving = ref(false)
 const linkedFillsRows = ref<Record<string, unknown>[]>([])
 const linkedBillsRows = ref<Record<string, unknown>[]>([])
 const linkedPosRows = ref<Record<string, unknown>[]>([])
+const linkedPosHistoryRows = ref<Record<string, unknown>[]>([])
 /** 跟单持仓（欧易 positions）最近一次成功拉取时间，用于「更新时间」列（与对方快照 refreshed_at 对齐语义） */
 const linkedOkxFetchedAt = ref<string | null>(null)
 const linkedAssetBalanceUsdt = ref<string | null>(null)
@@ -309,6 +310,7 @@ const loadLinkedOkxTradeData = async (silent = false) => {
     linkedFillsRows.value = []
     linkedBillsRows.value = []
     linkedPosRows.value = []
+    linkedPosHistoryRows.value = []
     linkedOkxFetchedAt.value = null
     linkedAssetBalanceUsdt.value = null
     if (!silent) linkedOkxErr.value = ''
@@ -325,7 +327,7 @@ const loadLinkedOkxTradeData = async (silent = false) => {
     const nowMs = Date.now()
     const needFillsBillsFetch = !silent || nowMs - linkedFillsBillsFetchedAtMs >= 800
     const needBalFetch = !silent || nowMs - linkedAssetBalanceFetchedAtMs >= 800
-    const [fRes, bRes, pRes, aRes] = await Promise.all([
+    const [fRes, bRes, pRes, hRes, aRes] = await Promise.all([
       needFillsBillsFetch
         ? fetch(`${API_BASE}/follow-accounts/linked-okx/fills?${q}&instType=SWAP&limit=100`, {
             headers: authHeaders(),
@@ -339,16 +341,25 @@ const loadLinkedOkxTradeData = async (silent = false) => {
       fetch(`${API_BASE}/follow-accounts/linked-okx/positions?${q}&instType=SWAP`, {
         headers: authHeaders(),
       }),
+      needFillsBillsFetch
+        ? fetch(
+            `${API_BASE}/follow-accounts/linked-okx/positions-history?${q}&instType=SWAP&mgnMode=isolated&limit=100`,
+            {
+              headers: authHeaders(),
+            },
+          )
+        : Promise.resolve(new Response(JSON.stringify({}), { status: 204 })),
       needBalFetch
         ? fetch(`${API_BASE}/follow-accounts/linked-okx/account-balance?${q}&ccy=USDT`, {
             headers: authHeaders(),
           })
         : Promise.resolve(new Response(JSON.stringify({}), { status: 204 })),
     ])
-    const [fj, bj, pj, aj] = await Promise.all([
+    const [fj, bj, pj, hj, aj] = await Promise.all([
       fRes.json().catch(() => ({})),
       bRes.json().catch(() => ({})),
       pRes.json().catch(() => ({})),
+      hRes.json().catch(() => ({})),
       aRes.json().catch(() => ({})),
     ])
     if (
@@ -361,7 +372,8 @@ const loadLinkedOkxTradeData = async (silent = false) => {
     // 仅成功响应覆盖列表；失败或 502 保留上一轮数据，避免「我的持仓」闪空
     if (fRes.ok) linkedFillsRows.value = _linkedDataArr(fRes, fj)
     if (bRes.ok) linkedBillsRows.value = _linkedDataArr(bRes, bj)
-    if (fRes.ok || bRes.ok) linkedFillsBillsFetchedAtMs = Date.now()
+    if (hRes.ok) linkedPosHistoryRows.value = _linkedDataArr(hRes, hj)
+    if (fRes.ok || bRes.ok || hRes.ok) linkedFillsBillsFetchedAtMs = Date.now()
     if (pRes.ok) {
       linkedPosRows.value = _linkedDataArr(pRes, pj)
       linkedOkxFetchedAt.value = new Date().toISOString()
@@ -377,10 +389,17 @@ const loadLinkedOkxTradeData = async (silent = false) => {
     if (!silent) {
       if (!fRes.ok) linkedOkxErr.value = _linkedErrText(fRes, fj)
       else if (!bRes.ok) linkedOkxErr.value = _linkedErrText(bRes, bj)
+      else if (!hRes.ok) linkedOkxErr.value = _linkedErrText(hRes, hj)
       else if (!pRes.ok) linkedOkxErr.value = _linkedErrText(pRes, pj)
       else if (!aRes.ok) linkedOkxErr.value = _linkedErrText(aRes, aj)
       else linkedOkxErr.value = ''
-    } else if ((fRes.ok || fRes.status === 204) && (bRes.ok || bRes.status === 204) && pRes.ok && (aRes.ok || aRes.status === 204)) {
+    } else if (
+      (fRes.ok || fRes.status === 204) &&
+      (bRes.ok || bRes.status === 204) &&
+      (hRes.ok || hRes.status === 204) &&
+      pRes.ok &&
+      (aRes.ok || aRes.status === 204)
+    ) {
       linkedOkxErr.value = ''
     }
   } catch (e: unknown) {
@@ -1768,13 +1787,54 @@ const matchedMyCloseFill = (e: PositionEventRow): Record<string, unknown> | null
     const t = parseLinkedTsMs(pickLinkedStr(r, ['fillTime', 'ts']))
     if (t == null) continue
     const dt = Math.abs(t - t0)
-    if (dt > 1000) continue
+    if (dt > 2000) continue
     if (dt < best) {
       best = dt
       picked = r
     }
   }
   return picked
+}
+
+const parseMyHistoryTsMs = (r: Record<string, unknown>): number | null => {
+  return parseLinkedTsMs(pickLinkedStr(r, ['uTime', 'cTime', 'ts']))
+}
+
+const myHistoryInstBaseCcy = (r: Record<string, unknown>): string => {
+  return instIdBaseCcy(pickLinkedStr(r, ['instId'])).toUpperCase()
+}
+
+const matchedMyCloseHistory = (e: PositionEventRow): Record<string, unknown> | null => {
+  const ccy = String(e.pos_ccy ?? '').trim().toUpperCase()
+  const t0 = eventCloseTsMs(e)
+  if (!ccy || t0 == null) return null
+  let picked: Record<string, unknown> | null = null
+  let best = Number.POSITIVE_INFINITY
+  for (const r of linkedPosHistoryRows.value) {
+    const hCcy = myHistoryInstBaseCcy(r)
+    if (!hCcy || hCcy === '—' || hCcy !== ccy) continue
+    const t = parseMyHistoryTsMs(r)
+    if (t == null) continue
+    const dt = Math.abs(t - t0)
+    if (dt > 2000) continue
+    if (dt < best) {
+      best = dt
+      picked = r
+    }
+  }
+  return picked
+}
+
+const myCloseHistoryRoiRaw = (e: PositionEventRow): number | null => {
+  const his = matchedMyCloseHistory(e)
+  if (!his) return null
+  const raw = pickLinkedStr(his, ['pnlRatio'])
+  if (raw === '—') return null
+  const s = String(raw).trim().replace(/%/g, '').replace(/,/g, '')
+  const n = Number(s)
+  if (!Number.isFinite(n)) return null
+  const pct = Math.abs(n) <= 1 ? n * 100 : n
+  return pct / 100
 }
 
 const myCloseRoiRaw = (e: PositionEventRow): number | null => {
@@ -1790,9 +1850,9 @@ const myCloseRoiRaw = (e: PositionEventRow): number | null => {
 
 const myCloseRoiDisplay = (e: PositionEventRow): string => {
   const rel = myCloseRoiRaw(e)
-  const fill = matchedMyCloseFill(e)
-  if (fill) {
-    const raw = pickLinkedStr(fill, ['pnlRatio'])
+  const his = matchedMyCloseHistory(e)
+  if (his) {
+    const raw = pickLinkedStr(his, ['pnlRatio'])
     if (raw !== '—') {
       const s = String(raw).trim()
       if (s.includes('%')) return s
@@ -1813,15 +1873,15 @@ const myCloseRoiDisplay = (e: PositionEventRow): string => {
 }
 
 const myCloseRoiClass = (e: PositionEventRow): string => {
-  const rel = myCloseRoiRaw(e)
+  const rel = myCloseHistoryRoiRaw(e) ?? myCloseRoiRaw(e)
   if (rel == null) return 'mono sm text-muted'
   return roiClassFromTone(toneFromNumber(rel))
 }
 
 const myCloseUplDisplay = (e: PositionEventRow): string => {
-  const fill = matchedMyCloseFill(e)
-  if (fill) {
-    const rp = pickLinkedStr(fill, ['realizedPnl'])
+  const his = matchedMyCloseHistory(e)
+  if (his) {
+    const rp = pickLinkedStr(his, ['realizedPnl'])
     if (rp !== '—') return formatUsdt3(rp)
   }
   const rel = myCloseRoiRaw(e)
@@ -1831,6 +1891,11 @@ const myCloseUplDisplay = (e: PositionEventRow): string => {
 }
 
 const myCloseUplClass = (e: PositionEventRow): string => {
+  const his = matchedMyCloseHistory(e)
+  if (his) {
+    const rp = pickLinkedStr(his, ['realizedPnl'])
+    if (rp !== '—') return uplCellClass(rp)
+  }
   const rel = myCloseRoiRaw(e)
   const invested = eventInvestedRaw(e)
   if (rel == null || invested == null) return 'mono sm text-muted'
@@ -1885,6 +1950,11 @@ const eventCounterpartyRoiClass = (e: PositionEventRow): string => {
 }
 
 const myClosePosDisplay = (e: PositionEventRow): string => {
+  const his = matchedMyCloseHistory(e)
+  if (his) {
+    const v = pickLinkedStr(his, ['closeTotalPos', 'closeAmount'])
+    if (v !== '—') return `${v}张`
+  }
   const fill = matchedMyCloseFill(e)
   if (!fill) return '—'
   const sz = pickLinkedStr(fill, ['fillSz', 'sz'])
@@ -1928,6 +1998,15 @@ const eventClosedNotionalUsdtDisplay = (e: PositionEventRow): string => {
 }
 
 const myCloseNotionalDisplay = (e: PositionEventRow): string => {
+  const his = matchedMyCloseHistory(e)
+  if (his) {
+    const closeTotalPos = Number(String(pickLinkedStr(his, ['closeTotalPos', 'closeAmount'])).trim().replace(/,/g, ''))
+    const closeAvgPx = Number(String(pickLinkedStr(his, ['closeAvgPx'])).trim().replace(/,/g, ''))
+    const ctVal = Number(String(pickLinkedStr(his, ['ctVal'])).trim().replace(/,/g, ''))
+    if (Number.isFinite(closeTotalPos) && Number.isFinite(closeAvgPx) && Number.isFinite(ctVal)) {
+      return formatUsdt3(Math.abs(closeTotalPos * closeAvgPx * ctVal))
+    }
+  }
   const fill = matchedMyCloseFill(e)
   if (!fill) return '—'
   const px = Number(String(pickLinkedStr(fill, ['fillPx', 'px'])).trim().replace(/,/g, ''))
