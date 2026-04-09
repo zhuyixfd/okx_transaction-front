@@ -2208,20 +2208,20 @@ const eventPnlTone = (e: PositionEventRow): PnlTone => {
                     <td class="nowrap sm">{{ formatEventOpenTime(e) }}</td>
                     <td class="nowrap sm">{{ formatTime(e.created_at) }}</td>
                     <td class="mono sm two-line-cell">
-                      <div :class="eventCurrentUplClass(e)">{{ eventCurrentUplDisplay(e) }}</div>
                       <div :class="uplCellClass(eventUplRaw(e))">{{ formatUplUsdt(eventUplRaw(e)) }}</div>
-                    </td>
-                    <td class="mono sm two-line-cell">
-                      <div :class="eventCurrentRoiClass(e)">{{ eventCurrentRoiDisplay(e) }}</div>
-                      <div :class="roiClassFromTone(eventPnlTone(e))">{{ eventRoiDisplay(e) }}</div>
-                    </td>
-                    <td class="mono sm two-line-cell">
                       <div class="text-muted">—</div>
-                      <div>{{ eventInvestedDisplay(e) }}</div>
                     </td>
                     <td class="mono sm two-line-cell">
-                      <div>{{ eventCurrentPosContracts(e) }}</div>
+                      <div :class="roiClassFromTone(eventPnlTone(e))">{{ eventRoiDisplay(e) }}</div>
+                      <div class="text-muted">—</div>
+                    </td>
+                    <td class="mono sm two-line-cell">
+                      <div>{{ eventInvestedDisplay(e) }}</div>
+                      <div class="text-muted">—</div>
+                    </td>
+                    <td class="mono sm two-line-cell">
                       <div>{{ formatEventPosContracts(e) }}</div>
+                      <div class="text-muted">—</div>
                     </td>
                   </tr>
                 </tbody>
