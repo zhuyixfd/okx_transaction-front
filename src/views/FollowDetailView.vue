@@ -2312,12 +2312,12 @@ const eventPnlTone = (e: PositionEventRow): PnlTone => {
                     <th>杠杆</th>
                     <th>开仓均价</th>
                     <th>平仓均价</th>
-                    <th>开仓时间</th>
-                    <th>平仓时间</th>
                     <th>收益额</th>
                     <th>收益率</th>
                     <th>持仓价值</th>
                     <th>持仓量</th>
+                    <th>开仓时间</th>
+                    <th>平仓时间</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -2341,8 +2341,6 @@ const eventPnlTone = (e: PositionEventRow): PnlTone => {
                       class="mono sm"
                       :class="{ 'mark-col': !positionClosedForEvent(e) }"
                     >{{ eventMarkPx(e) }}</td>
-                    <td class="nowrap sm">{{ formatEventOpenTime(e) }}</td>
-                    <td class="nowrap sm">{{ formatTime(e.created_at) }}</td>
                     <td class="mono sm two-line-cell">
                       <div :class="uplCellClass(eventUplRaw(e))">{{ formatUplUsdt(eventUplRaw(e)) }}</div>
                       <div :class="myCloseUplClass(e)">{{ myCloseUplDisplay(e) }}</div>
@@ -2359,6 +2357,8 @@ const eventPnlTone = (e: PositionEventRow): PnlTone => {
                       <div>{{ formatEventPosContracts(e) }}</div>
                       <div>{{ myClosePosDisplay(e) }}</div>
                     </td>
+                    <td class="nowrap sm">{{ formatEventOpenTime(e) }}</td>
+                    <td class="nowrap sm">{{ formatTime(e.created_at) }}</td>
                   </tr>
                 </tbody>
               </table>
