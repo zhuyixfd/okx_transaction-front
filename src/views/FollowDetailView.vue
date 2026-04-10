@@ -222,6 +222,7 @@ const linkedOkxFetchedAt = ref<string | null>(null)
 const linkedAssetBalanceUsdt = ref<string | null>(null)
 const linkedAvailBalanceUsdt = ref<string | null>(null)
 let linkedFillsBillsFetchedAtMs = 0
+let linkedPosHistoryFetchedAtMs = 0
 let linkedAssetBalanceFetchedAtMs = 0
 const linkedOkxErr = ref('')
 /** 每次发起本人 OKX 三联请求前递增，用于丢弃慢于后一轮的过期响应，避免表格闪空 */
@@ -328,6 +329,7 @@ const loadLinkedOkxTradeData = async (silent = false) => {
   try {
     const nowMs = Date.now()
     const needFillsBillsFetch = !silent || nowMs - linkedFillsBillsFetchedAtMs >= 800
+    const needHistoryFetch = !silent || nowMs - linkedPosHistoryFetchedAtMs >= 3000
     const needBalFetch = !silent || nowMs - linkedAssetBalanceFetchedAtMs >= 800
     const [fRes, bRes, pRes, hRes, aRes] = await Promise.all([
       needFillsBillsFetch
@@ -343,7 +345,7 @@ const loadLinkedOkxTradeData = async (silent = false) => {
       fetch(`${API_BASE}/follow-accounts/linked-okx/positions?${q}&instType=SWAP`, {
         headers: authHeaders(),
       }),
-      needFillsBillsFetch
+      needHistoryFetch
         ? fetch(
             `${API_BASE}/follow-accounts/linked-okx/positions-history?${q}&instType=SWAP&mgnMode=isolated&limit=100`,
             {
@@ -375,7 +377,8 @@ const loadLinkedOkxTradeData = async (silent = false) => {
     if (fRes.ok) linkedFillsRows.value = _linkedDataArr(fRes, fj)
     if (bRes.ok) linkedBillsRows.value = _linkedDataArr(bRes, bj)
     if (hRes.ok) linkedPosHistoryRows.value = _linkedDataArr(hRes, hj)
-    if (fRes.ok || bRes.ok || hRes.ok) linkedFillsBillsFetchedAtMs = Date.now()
+    if (fRes.ok || bRes.ok) linkedFillsBillsFetchedAtMs = Date.now()
+    if (hRes.ok) linkedPosHistoryFetchedAtMs = Date.now()
     if (pRes.ok) {
       linkedPosRows.value = _linkedDataArr(pRes, pj)
       linkedOkxFetchedAt.value = new Date().toISOString()
