@@ -220,6 +220,7 @@ const linkedPosHistoryRows = ref<Record<string, unknown>[]>([])
 /** 跟单持仓（欧易 positions）最近一次成功拉取时间，用于「更新时间」列（与对方快照 refreshed_at 对齐语义） */
 const linkedOkxFetchedAt = ref<string | null>(null)
 const linkedAssetBalanceUsdt = ref<string | null>(null)
+const linkedAvailBalanceUsdt = ref<string | null>(null)
 let linkedFillsBillsFetchedAtMs = 0
 let linkedAssetBalanceFetchedAtMs = 0
 const linkedOkxErr = ref('')
@@ -313,6 +314,7 @@ const loadLinkedOkxTradeData = async (silent = false) => {
     linkedPosHistoryRows.value = []
     linkedOkxFetchedAt.value = null
     linkedAssetBalanceUsdt.value = null
+    linkedAvailBalanceUsdt.value = null
     if (!silent) linkedOkxErr.value = ''
     return
   }
@@ -384,6 +386,24 @@ const loadLinkedOkxTradeData = async (silent = false) => {
       const totalEq = first?.totalEq
       linkedAssetBalanceUsdt.value =
         totalEq == null || String(totalEq).trim() === '' ? null : String(totalEq)
+      const availEq = first?.availEq
+      let avail: string | null =
+        availEq == null || String(availEq).trim() === '' ? null : String(availEq)
+      if (avail == null) {
+        const details = first?.details
+        if (Array.isArray(details)) {
+          const usdt = details.find((x) => {
+            if (!x || typeof x !== 'object') return false
+            const ccy = (x as Record<string, unknown>).ccy
+            return String(ccy ?? '').trim().toUpperCase() === 'USDT'
+          }) as Record<string, unknown> | undefined
+          if (usdt) {
+            const v = usdt.availEq ?? usdt.availBal
+            avail = v == null || String(v).trim() === '' ? null : String(v)
+          }
+        }
+      }
+      linkedAvailBalanceUsdt.value = avail
       linkedAssetBalanceFetchedAtMs = Date.now()
     }
     if (!silent) {
@@ -2293,6 +2313,11 @@ const eventPnlTone = (e: PositionEventRow): PnlTone => {
             <span class="sim-total-pill">
               我的资产余额（USDT）<strong class="mono sim-total-pnl-val">{{
                 linkedAssetBalanceUsdt == null ? '—' : formatUsdt3(linkedAssetBalanceUsdt)
+              }}</strong>
+            </span>
+            <span class="sim-total-pill">
+              我的可用余额（USDT）<strong class="mono sim-total-pnl-val">{{
+                linkedAvailBalanceUsdt == null ? '—' : formatUsdt3(linkedAvailBalanceUsdt)
               }}</strong>
             </span>
           </div>
