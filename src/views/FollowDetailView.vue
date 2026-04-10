@@ -27,6 +27,7 @@ type FollowRow = {
   okx_api_account_id?: number | null
   live_trading_enabled?: boolean
   open_by_asset_ratio?: boolean
+  open_by_asset_ratio_coeff?: number | string | null
 }
 
 type OkxApiListRow = {
@@ -56,6 +57,8 @@ type FollowCfgForm = {
   live_trading_enabled: boolean
   /** true：按资产比例开仓；false：按固定下注金额开仓 */
   open_by_asset_ratio: boolean
+  /** 按资产比例开仓系数：最终比例=对方资产仓位占比×该系数 */
+  open_by_asset_ratio_coeff: number
 }
 
 type PositionEventRow = {
@@ -201,6 +204,7 @@ const followCfg = ref<FollowCfgForm>({
   stop_loss_ratio: null,
   live_trading_enabled: false,
   open_by_asset_ratio: false,
+  open_by_asset_ratio_coeff: 1,
 })
 const configSaving = ref(false)
 const configMsg = ref('')
@@ -1079,6 +1083,7 @@ const syncFollowCfgFromCurrent = () => {
     stop_loss_ratio: parseNum(c.stop_loss_ratio),
     live_trading_enabled: Boolean(c.live_trading_enabled),
     open_by_asset_ratio: Boolean(c.open_by_asset_ratio),
+    open_by_asset_ratio_coeff: parseNum(c.open_by_asset_ratio_coeff) ?? 1,
   }
 }
 
@@ -1142,6 +1147,7 @@ const saveFollowConfig = async () => {
         stop_loss_ratio: followCfg.value.stop_loss_ratio,
         live_trading_enabled: followCfg.value.live_trading_enabled,
         open_by_asset_ratio: followCfg.value.open_by_asset_ratio,
+        open_by_asset_ratio_coeff: followCfg.value.open_by_asset_ratio_coeff,
       }),
     })
     const data = (await res.json().catch(() => ({}))) as { detail?: string }
@@ -2905,6 +2911,20 @@ const eventPnlTone = (e: PositionEventRow): PnlTone => {
                     <label class="form-check-label" for="fc-open-by-asset-ratio">
                       按资产比例开仓
                     </label>
+                  </div>
+                  <div class="mb-2">
+                    <label class="form-label mb-1" for="fc-open-by-asset-ratio-coeff">
+                      资产比例系数
+                    </label>
+                    <input
+                      id="fc-open-by-asset-ratio-coeff"
+                      v-model.number="followCfg.open_by_asset_ratio_coeff"
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      class="form-control form-control-sm"
+                      placeholder="例如 0.5（对方10%，我方按5%开仓）"
+                    />
                   </div>
                   <div class="mb-2">
                     <label
