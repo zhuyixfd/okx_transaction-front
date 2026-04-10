@@ -1757,6 +1757,17 @@ const latestOpenSimByCcy = computed(() => {
   return m
 })
 
+const latestSimByCcy = computed(() => {
+  const m = new Map<string, FollowSimRecordRow>()
+  for (const r of simRecords.value) {
+    const c = String(r.pos_ccy ?? '').trim().toUpperCase()
+    if (!c) continue
+    const prev = m.get(c)
+    if (!prev || r.id > prev.id) m.set(c, r)
+  }
+  return m
+})
+
 /** 持仓操作以“对方当前持仓”为主，同时补上“我方独有币种”。 */
 const simOpsRows = computed(() => {
   const out: Array<{
@@ -1768,7 +1779,7 @@ const simOpsRows = computed(() => {
   for (const row of snapshotRowsDecorated.value) {
     const c = String(row.p.pos_ccy ?? '').trim().toUpperCase()
     if (c) existingCcy.add(c)
-    const rec = c ? latestOpenSimByCcy.value.get(c) ?? null : null
+    const rec = c ? latestOpenSimByCcy.value.get(c) ?? latestSimByCcy.value.get(c) ?? null : null
     out.push({ row, rec, source: 'snapshot' })
   }
   for (const lr of linkedPosRowsDecorated.value) {
@@ -1806,7 +1817,7 @@ const simOpsRows = computed(() => {
       rowClass: rowClassFromPnlTone(tone),
       badgeClass: badgeClassFromPnlTone(tone),
     }
-    const rec = latestOpenSimByCcy.value.get(c) ?? null
+    const rec = latestOpenSimByCcy.value.get(c) ?? latestSimByCcy.value.get(c) ?? null
     out.push({ row, rec, source: 'mine' })
   }
   return out
