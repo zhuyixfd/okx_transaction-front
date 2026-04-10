@@ -2552,16 +2552,15 @@ const eventPnlTone = (e: PositionEventRow): PnlTone => {
                     <td class="mono sm">{{ x.rec?.add_margin_count ?? 0 }}</td>
                     <td class="nowrap sm">
                       <button
-                        v-if="x.rec"
                         type="button"
                         class="btn btn-sm btn-primary"
-                        :disabled="simActionRunningId === x.rec.id"
-                        @click="onPositionActionClick('add', x.rec)"
+                        :disabled="!x.rec || simActionRunningId === x.rec.id"
+                        @click="x.rec && onPositionActionClick('add', x.rec)"
                       >
                         {{ hasLinkedPositionForCcy(x.row.p.pos_ccy) ? '加仓' : '开仓' }}
                       </button>
                       <button
-                        v-else-if="x.source === 'snapshot'"
+                        v-if="!x.rec && x.source === 'snapshot'"
                         type="button"
                         class="btn btn-sm btn-primary"
                         :disabled="snapshotFollowRunningPosId === x.row.p.pos_id"
@@ -2569,7 +2568,6 @@ const eventPnlTone = (e: PositionEventRow): PnlTone => {
                       >
                         开仓
                       </button>
-                      <span v-else class="text-muted">—</span>
                     </td>
                     <td class="nowrap sm">
                       <button
