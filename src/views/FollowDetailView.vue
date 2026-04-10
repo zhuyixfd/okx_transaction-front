@@ -1327,6 +1327,14 @@ const formatAvgPx = (raw: string | null | undefined): string => {
   return sign + trimTrailingZeros(rounded.toFixed(dec))
 }
 
+/** 跟单记录中的开/平仓均价固定保留两位小数。 */
+const formatAvgPx2 = (raw: string | null | undefined): string => {
+  if (raw == null || raw === '') return '—'
+  const n = Number(raw)
+  if (!Number.isFinite(n)) return String(raw)
+  return n.toFixed(2)
+}
+
 const formatTime = (iso: string | null) => {
   if (!iso) return '—'
   const d = new Date(iso)
@@ -2076,13 +2084,13 @@ const myClosedNotionalDisplay = (e: PositionEventRow): string => {
 const myHistoryOpenAvgPxDisplay = (e: PositionEventRow): string => {
   const his = matchedMyCloseHistory(e)
   if (!his) return ''
-  return formatAvgPx(pickLinkedStr(his, ['openAvgPx']))
+  return formatAvgPx2(pickLinkedStr(his, ['openAvgPx']))
 }
 
 const myHistoryCloseAvgPxDisplay = (e: PositionEventRow): string => {
   const his = matchedMyCloseHistory(e)
   if (!his) return ''
-  return formatAvgPx(pickLinkedStr(his, ['closeAvgPx']))
+  return formatAvgPx2(pickLinkedStr(his, ['closeAvgPx']))
 }
 
 const myHistoryOpenTimeDisplay = (e: PositionEventRow): string => {
@@ -2597,14 +2605,14 @@ const eventPnlTone = (e: PositionEventRow): PnlTone => {
                     <td>{{ formatPosSide(e.pos_side) }}</td>
                     <td>{{ formatLever(e.lever) }}</td>
                     <td class="mono sm two-line-cell">
-                      <div>{{ formatAvgPx(e.avg_px) }}</div>
+                      <div>{{ formatAvgPx2(e.avg_px) }}</div>
                       <div>{{ myHistoryOpenAvgPxDisplay(e) }}</div>
                     </td>
                     <td
                       class="mono sm two-line-cell"
                       :class="{ 'mark-col': !positionClosedForEvent(e) }"
                     >
-                      <div>{{ eventMarkPx(e) }}</div>
+                      <div>{{ formatAvgPx2(eventMarkPx(e)) }}</div>
                       <div>{{ myHistoryCloseAvgPxDisplay(e) }}</div>
                     </td>
                     <td class="mono sm two-line-cell">
