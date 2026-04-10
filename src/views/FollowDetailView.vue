@@ -1757,14 +1757,60 @@ const latestOpenSimByCcy = computed(() => {
   return m
 })
 
-/** 持仓操作以“对方当前持仓”作为主表，再关联本人 open 记录。 */
-const simOpsRows = computed(() =>
-  snapshotRowsDecorated.value.map((row) => {
+/** 持仓操作以“对方当前持仓”为主，同时补上“我方独有币种”。 */
+const simOpsRows = computed(() => {
+  const out: Array<{
+    row: (typeof snapshotRowsDecorated.value)[number]
+    rec: FollowSimRecordRow | null
+    source: 'snapshot' | 'mine'
+  }> = []
+  const existingCcy = new Set<string>()
+  for (const row of snapshotRowsDecorated.value) {
     const c = String(row.p.pos_ccy ?? '').trim().toUpperCase()
+    if (c) existingCcy.add(c)
     const rec = c ? latestOpenSimByCcy.value.get(c) ?? null : null
-    return { row, rec }
-  }),
-)
+    out.push({ row, rec, source: 'snapshot' })
+  }
+  for (const lr of linkedPosRowsDecorated.value) {
+    const c = instIdBaseCcy(pickLinkedStr(lr.r, ['instId'])).toUpperCase()
+    if (!c || c === '—' || existingCcy.has(c)) continue
+    existingCcy.add(c)
+    const pseudo: PositionSnapshotRow = {
+      pos_id: pickLinkedStr(lr.r, ['posId']) !== '—' ? pickLinkedStr(lr.r, ['posId']) : `MY-${c}`,
+      c_time: pickLinkedStr(lr.r, ['cTime']) !== '—' ? pickLinkedStr(lr.r, ['cTime']) : null,
+      c_time_format: null,
+      pos_ccy: c,
+      pos_side: pickLinkedStr(lr.r, ['posSide']) !== '—' ? pickLinkedStr(lr.r, ['posSide']) : null,
+      lever: pickLinkedStr(lr.r, ['lever']) !== '—' ? pickLinkedStr(lr.r, ['lever']) : null,
+      avg_px: pickLinkedStr(lr.r, ['avgPx']) !== '—' ? pickLinkedStr(lr.r, ['avgPx']) : null,
+      last_px:
+        pickLinkedStr(lr.r, ['markPx', 'last']) !== '—'
+          ? pickLinkedStr(lr.r, ['markPx', 'last'])
+          : null,
+      upl_ratio: pickLinkedStr(lr.r, ['uplRatio']) !== '—' ? pickLinkedStr(lr.r, ['uplRatio']) : null,
+      upl: pickLinkedStr(lr.r, ['upl']) !== '—' ? pickLinkedStr(lr.r, ['upl']) : null,
+      pos: pickLinkedStr(lr.r, ['pos']) !== '—' ? pickLinkedStr(lr.r, ['pos']) : null,
+      notional_usd:
+        pickLinkedStr(lr.r, ['notionalUsd']) !== '—' ? pickLinkedStr(lr.r, ['notionalUsd']) : null,
+      notional_ccy:
+        pickLinkedStr(lr.r, ['notionalCcy']) !== '—' ? pickLinkedStr(lr.r, ['notionalCcy']) : null,
+      notional: pickLinkedStr(lr.r, ['notional']) !== '—' ? pickLinkedStr(lr.r, ['notional']) : null,
+      margin: pickLinkedStr(lr.r, ['margin']) !== '—' ? pickLinkedStr(lr.r, ['margin']) : null,
+      mgn_ratio: pickLinkedStr(lr.r, ['mgnRatio']) !== '—' ? pickLinkedStr(lr.r, ['mgnRatio']) : null,
+      liq_px: pickLinkedStr(lr.r, ['liqPx']) !== '—' ? pickLinkedStr(lr.r, ['liqPx']) : null,
+    }
+    const tone = linkedPosPnlTone(lr.r)
+    const row = {
+      p: pseudo,
+      tone,
+      rowClass: rowClassFromPnlTone(tone),
+      badgeClass: badgeClassFromPnlTone(tone),
+    }
+    const rec = latestOpenSimByCcy.value.get(c) ?? null
+    out.push({ row, rec, source: 'mine' })
+  }
+  return out
+})
 const simOpsShownCount = computed(() => simOpsRows.value.length)
 
 const simInvestedByCloseEventId = computed(() => {
@@ -2479,7 +2525,7 @@ const eventPnlTone = (e: PositionEventRow): PnlTone => {
                 <tbody>
                   <tr
                     v-for="x in simOpsRows"
-                    :key="'op-' + x.row.p.pos_id"
+                    :key="'op-' + x.source + '-' + x.row.p.pos_id"
                     :class="x.row.rowClass"
                   >
                     <td class="mono td-pos-id">
@@ -2504,7 +2550,7 @@ const eventPnlTone = (e: PositionEventRow): PnlTone => {
                         {{ hasLinkedPositionForCcy(x.row.p.pos_ccy) ? '加仓' : '开仓' }}
                       </button>
                       <button
-                        v-else
+                        v-else-if="x.source === 'snapshot'"
                         type="button"
                         class="btn btn-sm btn-primary"
                         :disabled="snapshotFollowRunningPosId === x.row.p.pos_id"
@@ -2512,6 +2558,7 @@ const eventPnlTone = (e: PositionEventRow): PnlTone => {
                       >
                         开仓
                       </button>
+                      <span v-else class="text-muted">—</span>
                     </td>
                     <td class="nowrap sm">
                       <button
