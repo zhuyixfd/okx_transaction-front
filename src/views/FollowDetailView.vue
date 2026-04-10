@@ -2577,7 +2577,7 @@ const eventPnlTone = (e: PositionEventRow): PnlTone => {
                         v-else
                         type="button"
                         class="btn btn-sm btn-warning"
-                        :disabled="!x.rec || !hasLinkedPositionForCcy(x.row.p.pos_ccy) || x.rec.status !== 'open' || simActionRunningId === x.rec.id"
+                        :disabled="!x.rec || !hasLinkedPositionForCcy(x.row.p.pos_ccy) || simActionRunningId === x.rec.id"
                         @click="x.rec && onPositionActionClick('reduce', x.rec)"
                       >
                         减仓
@@ -2591,7 +2591,7 @@ const eventPnlTone = (e: PositionEventRow): PnlTone => {
                         v-else
                         type="button"
                         class="btn btn-sm btn-danger"
-                        :disabled="!x.rec || !hasLinkedPositionForCcy(x.row.p.pos_ccy) || x.rec.status !== 'open' || simActionRunningId === x.rec.id"
+                        :disabled="!x.rec || !hasLinkedPositionForCcy(x.row.p.pos_ccy) || simActionRunningId === x.rec.id"
                         @click="x.rec && onPositionActionClick('close', x.rec)"
                       >
                         平仓
@@ -2605,7 +2605,7 @@ const eventPnlTone = (e: PositionEventRow): PnlTone => {
                         v-else
                         type="button"
                         class="btn btn-sm btn-secondary"
-                        :disabled="!x.rec || !hasLinkedPositionForCcy(x.row.p.pos_ccy) || x.rec.status !== 'open' || simActionRunningId === x.rec.id"
+                        :disabled="!x.rec || !hasLinkedPositionForCcy(x.row.p.pos_ccy) || simActionRunningId === x.rec.id"
                         @click="x.rec && onPositionActionClick('reverse', x.rec)"
                       >
                         反手
