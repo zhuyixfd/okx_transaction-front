@@ -1626,11 +1626,12 @@ const deleteSimRecord = async (r: FollowSimRecordRow) => {
 
 const onPositionActionClick = async (
   action: 'add' | 'reduce' | 'close' | 'reverse',
-  r: FollowSimRecordRow,
+  r: FollowSimRecordRow | null,
+  fallback?: { pos_ccy?: string | null; pos_side?: string | null },
 ) => {
   const un = paramUniqueName.value
   if (!un) return
-  simActionRunningId.value = r.id
+  simActionRunningId.value = r?.id ?? -1
   simError.value = ''
   try {
     const res = await fetch(`${API_BASE}/follow-accounts/position-action`, {
@@ -1638,7 +1639,9 @@ const onPositionActionClick = async (
       headers: authHeaders(),
       body: JSON.stringify({
         unique_name: un,
-        sim_record_id: r.id,
+        sim_record_id: r?.id ?? null,
+        pos_ccy: r?.pos_ccy ?? fallback?.pos_ccy ?? null,
+        pos_side: r?.pos_side ?? fallback?.pos_side ?? null,
         action,
       }),
     })
@@ -2554,8 +2557,8 @@ const eventPnlTone = (e: PositionEventRow): PnlTone => {
                       <button
                         type="button"
                         class="btn btn-sm btn-primary"
-                        :disabled="!x.rec || simActionRunningId === x.rec.id"
-                        @click="x.rec && onPositionActionClick('add', x.rec)"
+                        :disabled="simActionRunningId === (x.rec?.id ?? -1)"
+                        @click="onPositionActionClick('add', x.rec ?? null, { pos_ccy: x.row.p.pos_ccy, pos_side: x.row.p.pos_side })"
                       >
                         {{ hasLinkedPositionForCcy(x.row.p.pos_ccy) ? '加仓' : '开仓' }}
                       </button>
@@ -2577,8 +2580,8 @@ const eventPnlTone = (e: PositionEventRow): PnlTone => {
                         v-else
                         type="button"
                         class="btn btn-sm btn-warning"
-                        :disabled="!x.rec || simActionRunningId === x.rec.id"
-                        @click="x.rec && onPositionActionClick('reduce', x.rec)"
+                        :disabled="simActionRunningId === (x.rec?.id ?? -1)"
+                        @click="onPositionActionClick('reduce', x.rec ?? null, { pos_ccy: x.row.p.pos_ccy, pos_side: x.row.p.pos_side })"
                       >
                         减仓
                       </button>
@@ -2591,8 +2594,8 @@ const eventPnlTone = (e: PositionEventRow): PnlTone => {
                         v-else
                         type="button"
                         class="btn btn-sm btn-danger"
-                        :disabled="!x.rec || simActionRunningId === x.rec.id"
-                        @click="x.rec && onPositionActionClick('close', x.rec)"
+                        :disabled="simActionRunningId === (x.rec?.id ?? -1)"
+                        @click="onPositionActionClick('close', x.rec ?? null, { pos_ccy: x.row.p.pos_ccy, pos_side: x.row.p.pos_side })"
                       >
                         平仓
                       </button>
@@ -2605,8 +2608,8 @@ const eventPnlTone = (e: PositionEventRow): PnlTone => {
                         v-else
                         type="button"
                         class="btn btn-sm btn-secondary"
-                        :disabled="!x.rec || simActionRunningId === x.rec.id"
-                        @click="x.rec && onPositionActionClick('reverse', x.rec)"
+                        :disabled="simActionRunningId === (x.rec?.id ?? -1)"
+                        @click="onPositionActionClick('reverse', x.rec ?? null, { pos_ccy: x.row.p.pos_ccy, pos_side: x.row.p.pos_side })"
                       >
                         反手
                       </button>
