@@ -2570,7 +2570,11 @@ const eventPnlTone = (e: PositionEventRow): PnlTone => {
                       </button>
                     </td>
                     <td class="nowrap sm">
+                      <template v-if="x.source === 'snapshot' && !hasLinkedPositionForCcy(x.row.p.pos_ccy)">
+                        <span class="text-muted">—</span>
+                      </template>
                       <button
+                        v-else
                         type="button"
                         class="btn btn-sm btn-warning"
                         :disabled="!x.rec || !hasLinkedPositionForCcy(x.row.p.pos_ccy) || x.rec.status !== 'open' || simActionRunningId === x.rec.id"
@@ -2580,7 +2584,11 @@ const eventPnlTone = (e: PositionEventRow): PnlTone => {
                       </button>
                     </td>
                     <td class="nowrap sm">
+                      <template v-if="x.source === 'snapshot' && !hasLinkedPositionForCcy(x.row.p.pos_ccy)">
+                        <span class="text-muted">—</span>
+                      </template>
                       <button
+                        v-else
                         type="button"
                         class="btn btn-sm btn-danger"
                         :disabled="!x.rec || !hasLinkedPositionForCcy(x.row.p.pos_ccy) || x.rec.status !== 'open' || simActionRunningId === x.rec.id"
@@ -2590,7 +2598,11 @@ const eventPnlTone = (e: PositionEventRow): PnlTone => {
                       </button>
                     </td>
                     <td class="nowrap sm">
+                      <template v-if="x.source === 'snapshot' && !hasLinkedPositionForCcy(x.row.p.pos_ccy)">
+                        <span class="text-muted">—</span>
+                      </template>
                       <button
+                        v-else
                         type="button"
                         class="btn btn-sm btn-secondary"
                         :disabled="!x.rec || !hasLinkedPositionForCcy(x.row.p.pos_ccy) || x.rec.status !== 'open' || simActionRunningId === x.rec.id"
