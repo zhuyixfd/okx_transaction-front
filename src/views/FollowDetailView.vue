@@ -1332,6 +1332,12 @@ const formatAvgPx2 = (raw: string | null | undefined): string => {
   if (raw == null || raw === '') return '—'
   const n = Number(raw)
   if (!Number.isFinite(n)) return String(raw)
+  if (n === 0) return '0.00'
+  // 极小值防抹零：避免 0.0000023 被显示成 0.00
+  if (Math.abs(n) < 0.01) {
+    const s = n.toFixed(10)
+    return trimTrailingZeros(s)
+  }
   return n.toFixed(2)
 }
 
