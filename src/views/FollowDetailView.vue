@@ -2573,39 +2573,33 @@ const eventPnlTone = (e: PositionEventRow): PnlTone => {
                     </td>
                     <td class="nowrap sm">
                       <button
-                        v-if="x.rec && hasLinkedPositionForCcy(x.row.p.pos_ccy)"
                         type="button"
                         class="btn btn-sm btn-warning"
-                        :disabled="x.rec.status !== 'open' || simActionRunningId === x.rec.id"
-                        @click="onPositionActionClick('reduce', x.rec)"
+                        :disabled="!x.rec || !hasLinkedPositionForCcy(x.row.p.pos_ccy) || x.rec.status !== 'open' || simActionRunningId === x.rec.id"
+                        @click="x.rec && onPositionActionClick('reduce', x.rec)"
                       >
                         减仓
                       </button>
-                      <span v-else class="text-muted">—</span>
                     </td>
                     <td class="nowrap sm">
                       <button
-                        v-if="x.rec && hasLinkedPositionForCcy(x.row.p.pos_ccy)"
                         type="button"
                         class="btn btn-sm btn-danger"
-                        :disabled="x.rec.status !== 'open' || simActionRunningId === x.rec.id"
-                        @click="onPositionActionClick('close', x.rec)"
+                        :disabled="!x.rec || !hasLinkedPositionForCcy(x.row.p.pos_ccy) || x.rec.status !== 'open' || simActionRunningId === x.rec.id"
+                        @click="x.rec && onPositionActionClick('close', x.rec)"
                       >
                         平仓
                       </button>
-                      <span v-else class="text-muted">—</span>
                     </td>
                     <td class="nowrap sm">
                       <button
-                        v-if="x.rec && hasLinkedPositionForCcy(x.row.p.pos_ccy)"
                         type="button"
                         class="btn btn-sm btn-secondary"
-                        :disabled="x.rec.status !== 'open' || simActionRunningId === x.rec.id"
-                        @click="onPositionActionClick('reverse', x.rec)"
+                        :disabled="!x.rec || !hasLinkedPositionForCcy(x.row.p.pos_ccy) || x.rec.status !== 'open' || simActionRunningId === x.rec.id"
+                        @click="x.rec && onPositionActionClick('reverse', x.rec)"
                       >
                         反手
                       </button>
-                      <span v-else class="text-muted">—</span>
                     </td>
                   </tr>
                 </tbody>
