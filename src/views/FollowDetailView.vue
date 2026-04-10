@@ -2067,6 +2067,34 @@ const myClosedNotionalDisplay = (e: PositionEventRow): string => {
   return '—'
 }
 
+const myHistoryOpenAvgPxDisplay = (e: PositionEventRow): string => {
+  const his = matchedMyCloseHistory(e)
+  if (!his) return ''
+  return formatAvgPx(pickLinkedStr(his, ['openAvgPx']))
+}
+
+const myHistoryCloseAvgPxDisplay = (e: PositionEventRow): string => {
+  const his = matchedMyCloseHistory(e)
+  if (!his) return ''
+  return formatAvgPx(pickLinkedStr(his, ['closeAvgPx']))
+}
+
+const myHistoryOpenTimeDisplay = (e: PositionEventRow): string => {
+  const his = matchedMyCloseHistory(e)
+  if (!his) return ''
+  const ts = parseLinkedTsMs(pickLinkedStr(his, ['cTime']))
+  if (ts == null) return ''
+  return formatTime(new Date(ts).toISOString())
+}
+
+const myHistoryCloseTimeDisplay = (e: PositionEventRow): string => {
+  const his = matchedMyCloseHistory(e)
+  if (!his) return ''
+  const ts = parseLinkedTsMs(pickLinkedStr(his, ['uTime', 'cTime']))
+  if (ts == null) return ''
+  return formatTime(new Date(ts).toISOString())
+}
+
 const eventCurrentUplDisplay = (e: PositionEventRow): string => {
   const pid = e.pos_id
   if (!pid) return '—'
@@ -2562,11 +2590,17 @@ const eventPnlTone = (e: PositionEventRow): PnlTone => {
                     <td>{{ e.pos_ccy ?? '—' }}</td>
                     <td>{{ formatPosSide(e.pos_side) }}</td>
                     <td>{{ formatLever(e.lever) }}</td>
-                    <td class="mono sm">{{ formatAvgPx(e.avg_px) }}</td>
+                    <td class="mono sm two-line-cell">
+                      <div>{{ formatAvgPx(e.avg_px) }}</div>
+                      <div>{{ myHistoryOpenAvgPxDisplay(e) }}</div>
+                    </td>
                     <td
-                      class="mono sm"
+                      class="mono sm two-line-cell"
                       :class="{ 'mark-col': !positionClosedForEvent(e) }"
-                    >{{ eventMarkPx(e) }}</td>
+                    >
+                      <div>{{ eventMarkPx(e) }}</div>
+                      <div>{{ myHistoryCloseAvgPxDisplay(e) }}</div>
+                    </td>
                     <td class="mono sm two-line-cell">
                       <div :class="uplCellClass(eventUplRaw(e))">{{ formatUplUsdt(eventUplRaw(e)) }}</div>
                       <div :class="myCloseUplClass(e)">{{ myCloseUplDisplay(e) }}</div>
@@ -2583,8 +2617,14 @@ const eventPnlTone = (e: PositionEventRow): PnlTone => {
                       <div>{{ eventClosedNotionalUsdtDisplay(e) }}</div>
                       <div>{{ myClosedNotionalDisplay(e) }}</div>
                     </td>
-                    <td class="nowrap sm">{{ formatEventOpenTime(e) }}</td>
-                    <td class="nowrap sm">{{ formatTime(e.created_at) }}</td>
+                    <td class="nowrap sm two-line-cell">
+                      <div>{{ formatEventOpenTime(e) }}</div>
+                      <div>{{ myHistoryOpenTimeDisplay(e) }}</div>
+                    </td>
+                    <td class="nowrap sm two-line-cell">
+                      <div>{{ formatTime(e.created_at) }}</div>
+                      <div>{{ myHistoryCloseTimeDisplay(e) }}</div>
+                    </td>
                   </tr>
                 </tbody>
               </table>
