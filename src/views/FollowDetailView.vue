@@ -2420,6 +2420,11 @@ const eventPnlTone = (e: PositionEventRow): PnlTone => {
               >{{ formatUsdt3(linkedHoldingsUnrealizedUsdt) }}</strong>
             </span>
             <span class="sim-total-pill">
+              我的资产余额（USDT）<strong class="mono sim-total-pnl-val">{{
+                linkedAssetBalanceUsdt == null ? '—' : formatUsdt3(linkedAssetBalanceUsdt)
+              }}</strong>
+            </span>
+            <span class="sim-total-pill">
               我的可用余额（USDT）<strong class="mono sim-total-pnl-val">{{
                 linkedAvailBalanceUsdt == null ? '—' : formatUsdt3(linkedAvailBalanceUsdt)
               }}</strong>
