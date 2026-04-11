@@ -229,8 +229,8 @@ let linkedFillsBillsFetchedAtMs = 0
 let linkedPosHistoryFetchedAtMs = 0
 let linkedAssetBalanceFetchedAtMs = 0
 const linkedOkxErr = ref('')
-/** 每次发起本人 OKX 三联请求前递增，用于丢弃慢于后一轮的过期响应，避免表格闪空 */
-const linkedOkxFetchGeneration = ref(0)
+/** 本人 OKX 拉取串行：整页 800ms 轮询若与上一轮请求重叠，旧实现每轮递增 generation 会丢弃慢响应，导致更新时间偶发 3–10s 才跳一次 */
+let linkedOkxSerial: Promise<void> = Promise.resolve()
 const linkedFillsPage = ref(1)
 const linkedBillsPage = ref(1)
 
@@ -308,11 +308,16 @@ const _linkedDataArr = (res: Response, j: unknown): Record<string, unknown>[] =>
   return Array.isArray(data) ? (data as Record<string, unknown>[]) : []
 }
 
-const loadLinkedOkxTradeData = async (silent = false) => {
+const loadLinkedOkxTradeData = (silent = false): Promise<void> => {
+  const p = linkedOkxSerial.then(() => runLinkedOkxTradeDataImpl(silent))
+  linkedOkxSerial = p.catch(() => {})
+  return p
+}
+
+async function runLinkedOkxTradeDataImpl(silent: boolean) {
   const un = paramUniqueName.value
   const c = current.value
   if (!un || !c?.okx_api_account_id) {
-    linkedOkxFetchGeneration.value += 1
     linkedFillsRows.value = []
     linkedBillsRows.value = []
     linkedPosRows.value = []
@@ -323,8 +328,6 @@ const loadLinkedOkxTradeData = async (silent = false) => {
     if (!silent) linkedOkxErr.value = ''
     return
   }
-  linkedOkxFetchGeneration.value += 1
-  const gen = linkedOkxFetchGeneration.value
   const startUn = un
   const startOkxId = c.okx_api_account_id
 
@@ -370,11 +373,7 @@ const loadLinkedOkxTradeData = async (silent = false) => {
       hRes.json().catch(() => ({})),
       aRes.json().catch(() => ({})),
     ])
-    if (
-      gen !== linkedOkxFetchGeneration.value ||
-      paramUniqueName.value !== startUn ||
-      current.value?.okx_api_account_id !== startOkxId
-    ) {
+    if (paramUniqueName.value !== startUn || current.value?.okx_api_account_id !== startOkxId) {
       return
     }
     // 仅成功响应覆盖列表；失败或 502 保留上一轮数据，避免「我的持仓」闪空
@@ -430,11 +429,7 @@ const loadLinkedOkxTradeData = async (silent = false) => {
       linkedOkxErr.value = ''
     }
   } catch (e: unknown) {
-    if (
-      gen !== linkedOkxFetchGeneration.value ||
-      paramUniqueName.value !== startUn ||
-      current.value?.okx_api_account_id !== startOkxId
-    ) {
+    if (paramUniqueName.value !== startUn || current.value?.okx_api_account_id !== startOkxId) {
       return
     }
     if (!silent) linkedOkxErr.value = e instanceof Error ? e.message : '网络错误'
@@ -451,7 +446,7 @@ const maxFollowPositionsLabelHint =
 
 /** 悬停「当前持仓」标题 */
 const snapshotSectionHint =
-  '每 2 秒静默请求快照接口（不整页刷新）。标记价来自库表 follow_position_snapshots，启用时由后台轮询更新。'
+  '整页约每 0.8 秒静默请求快照接口。标记价来自库表 follow_position_snapshots，启用时由后台轮询更新。'
 
 /** 悬停「模拟跟单资金」标题（follow_sim_records） */
 const simRecordsSectionHint =
@@ -459,11 +454,11 @@ const simRecordsSectionHint =
 
 /** 悬停「跟单持仓」：本人绑定 OKX 的永续持仓 */
 const followMyPositionsSectionHint =
-  '数据来自欧易私有接口 GET /api/v5/account/positions（SWAP），使用本页绑定的 API 密钥；与「对方持仓」社区接口、与「模拟跟单资金」表均无关。每 2 秒与同轮询下的页内下方「本人 OKX」成交、保证金账单一并刷新。'
+  '数据来自欧易私有接口 GET /api/v5/account/positions（SWAP），使用本页绑定的 API 密钥；与「对方持仓」社区接口、与「模拟跟单资金」表均无关。整页约每 0.8 秒触发一轮；本人 OKX 多接口同批请求在队列中串行执行，避免重叠丢弃慢响应，单轮完成后「更新时间」才会前进。'
 
 /** 悬停「开仓 / 平仓记录」标题 */
 const eventsSectionHint =
-  '每 2 秒静默刷新当前页数据。仅当 posId 出现/消失时写入记录；本表仅展示已平仓记录。'
+  '整页约每 0.8 秒静默刷新当前页数据。仅当 posId 出现/消失时写入记录；本表仅展示已平仓记录。'
 
 let pollTimer: ReturnType<typeof setInterval> | null = null
 
