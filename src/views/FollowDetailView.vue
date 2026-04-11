@@ -2329,7 +2329,6 @@ const eventPnlTone = (e: PositionEventRow): PnlTone => {
                     <th>维持保证金率</th>
                     <th>开仓均价</th>
                     <th>标记价格</th>
-                    <th>预估强平价</th>
                     <th>开仓时间</th>
                     <th>更新时间</th>
                     <th class="nowrap sm">跟单</th>
@@ -2356,7 +2355,6 @@ const eventPnlTone = (e: PositionEventRow): PnlTone => {
                     <td class="mono sm">{{ formatMaintMarginRatioPct(row.p.mgn_ratio) }}</td>
                     <td class="mono sm">{{ formatAvgPx(row.p.avg_px) }}</td>
                     <td class="mono sm mark-col">{{ row.p.last_px ?? '—' }}</td>
-                    <td class="mono sm">{{ simRecordExtraText(row.p.liq_px) || '—' }}</td>
                     <td class="nowrap sm">{{ row.p.c_time_format ?? '—' }}</td>
                     <td class="nowrap sm">{{ formatTime(snapshot.refreshed_at) }}</td>
                     <td class="nowrap sm">
