@@ -390,89 +390,27 @@ async function runLinkedOkxTradeDataImpl(silent: boolean) {
     }
   })()
 
-  const heavySlot = linkedOkxHeavySerial.then(async () => {
-    if (paramUniqueName.value !== startUn || current.value?.okx_api_account_id !== startOkxId) {
-      return null
-    }
-    const t = Date.now()
-    const needFillsBillsFetch = !silent || t - linkedFillsBillsFetchedAtMs >= 800
-    const needHistoryFetch = !silent || t - linkedPosHistoryFetchedAtMs >= 3000
-    try {
-      const [fRes, bRes, hRes] = await Promise.all([
-        needFillsBillsFetch
-          ? fetch(`${API_BASE}/follow-accounts/linked-okx/fills?${q}&instType=SWAP&limit=100`, {
-              headers: authHeaders(),
-            })
-          : Promise.resolve(new Response(JSON.stringify({}), { status: 204 })),
-        needFillsBillsFetch
-          ? fetch(`${API_BASE}/follow-accounts/linked-okx/margin-bills?${q}&instType=SWAP&limit=100`, {
-              headers: authHeaders(),
-            })
-          : Promise.resolve(new Response(JSON.stringify({}), { status: 204 })),
-        needHistoryFetch
-          ? fetch(
-              `${API_BASE}/follow-accounts/linked-okx/positions-history?${q}&instType=SWAP&mgnMode=isolated&limit=100`,
-              {
-                headers: authHeaders(),
-              },
-            )
-          : Promise.resolve(new Response(JSON.stringify({}), { status: 204 })),
-      ])
-      const [fj, bj, hj] = await Promise.all([
-        fRes.json().catch(() => ({})),
-        bRes.json().catch(() => ({})),
-        hRes.json().catch(() => ({})),
-      ])
-      if (paramUniqueName.value !== startUn || current.value?.okx_api_account_id !== startOkxId) {
-        return null
-      }
-      if (fRes.ok) linkedFillsRows.value = _linkedDataArr(fRes, fj)
-      if (bRes.ok) linkedBillsRows.value = _linkedDataArr(bRes, bj)
-      if (hRes.ok) linkedPosHistoryRows.value = _linkedDataArr(hRes, hj)
-      if (fRes.ok || bRes.ok) linkedFillsBillsFetchedAtMs = Date.now()
-      if (hRes.ok) linkedPosHistoryFetchedAtMs = Date.now()
-      return { fRes, bRes, hRes, fj, bj, hj }
-    } catch {
-      return null
-    }
-  })
-  linkedOkxHeavySerial = heavySlot.catch(() => {})
-
   try {
-    const [lo, ho] = await Promise.all([lightPromise, heavySlot])
+    const lo = await lightPromise
     if (paramUniqueName.value !== startUn || current.value?.okx_api_account_id !== startOkxId) {
       return
     }
-    if (!lo || !ho) {
+    if (!lo) {
       if (!silent) {
-        if (lo == null && lightSeq !== linkedOkxLightSeq) {
+        if (lightSeq !== linkedOkxLightSeq) {
           // 新一轮轻量请求已发起，本包作废，不覆盖错误提示
-        } else if (lo == null && ho == null) {
-          linkedOkxErr.value = '本人 OKX 数据加载失败'
-        } else if (lo == null) {
-          linkedOkxErr.value = '持仓或余额加载失败'
         } else {
-          linkedOkxErr.value = '成交、保证金流水或历史持仓加载失败'
+          linkedOkxErr.value = '持仓或余额加载失败'
         }
       }
       return
     }
     const { pRes, aRes, pj, aj } = lo
-    const { fRes, bRes, hRes, fj, bj, hj } = ho
     if (!silent) {
-      if (!fRes.ok) linkedOkxErr.value = _linkedErrText(fRes, fj)
-      else if (!bRes.ok) linkedOkxErr.value = _linkedErrText(bRes, bj)
-      else if (!hRes.ok) linkedOkxErr.value = _linkedErrText(hRes, hj)
-      else if (!pRes.ok) linkedOkxErr.value = _linkedErrText(pRes, pj)
+      if (!pRes.ok) linkedOkxErr.value = _linkedErrText(pRes, pj)
       else if (!aRes.ok) linkedOkxErr.value = _linkedErrText(aRes, aj)
       else linkedOkxErr.value = ''
-    } else if (
-      (fRes.ok || fRes.status === 204) &&
-      (bRes.ok || bRes.status === 204) &&
-      (hRes.ok || hRes.status === 204) &&
-      pRes.ok &&
-      (aRes.ok || aRes.status === 204)
-    ) {
+    } else if (pRes.ok && (aRes.ok || aRes.status === 204)) {
       linkedOkxErr.value = ''
     }
   } catch (e: unknown) {
@@ -1812,52 +1750,12 @@ const simOpsRows = computed(() => {
   const out: Array<{
     row: (typeof snapshotRowsDecorated.value)[number]
     rec: FollowSimRecordRow | null
-    source: 'snapshot' | 'mine'
+    source: 'snapshot'
   }> = []
-  const existingCcy = new Set<string>()
   for (const row of snapshotRowsDecorated.value) {
     const c = String(row.p.pos_ccy ?? '').trim().toUpperCase()
-    if (c) existingCcy.add(c)
     const rec = c ? latestOpenSimByCcy.value.get(c) ?? latestSimByCcy.value.get(c) ?? null : null
     out.push({ row, rec, source: 'snapshot' })
-  }
-  for (const lr of linkedPosRowsDecorated.value) {
-    const c = instIdBaseCcy(pickLinkedStr(lr.r, ['instId'])).toUpperCase()
-    if (!c || c === '—' || existingCcy.has(c)) continue
-    existingCcy.add(c)
-    const pseudo: PositionSnapshotRow = {
-      pos_id: pickLinkedStr(lr.r, ['posId']) !== '—' ? pickLinkedStr(lr.r, ['posId']) : `MY-${c}`,
-      c_time: pickLinkedStr(lr.r, ['cTime']) !== '—' ? pickLinkedStr(lr.r, ['cTime']) : null,
-      c_time_format: null,
-      pos_ccy: c,
-      pos_side: pickLinkedStr(lr.r, ['posSide']) !== '—' ? pickLinkedStr(lr.r, ['posSide']) : null,
-      lever: pickLinkedStr(lr.r, ['lever']) !== '—' ? pickLinkedStr(lr.r, ['lever']) : null,
-      avg_px: pickLinkedStr(lr.r, ['avgPx']) !== '—' ? pickLinkedStr(lr.r, ['avgPx']) : null,
-      last_px:
-        pickLinkedStr(lr.r, ['markPx', 'last']) !== '—'
-          ? pickLinkedStr(lr.r, ['markPx', 'last'])
-          : null,
-      upl_ratio: pickLinkedStr(lr.r, ['uplRatio']) !== '—' ? pickLinkedStr(lr.r, ['uplRatio']) : null,
-      upl: pickLinkedStr(lr.r, ['upl']) !== '—' ? pickLinkedStr(lr.r, ['upl']) : null,
-      pos: pickLinkedStr(lr.r, ['pos']) !== '—' ? pickLinkedStr(lr.r, ['pos']) : null,
-      notional_usd:
-        pickLinkedStr(lr.r, ['notionalUsd']) !== '—' ? pickLinkedStr(lr.r, ['notionalUsd']) : null,
-      notional_ccy:
-        pickLinkedStr(lr.r, ['notionalCcy']) !== '—' ? pickLinkedStr(lr.r, ['notionalCcy']) : null,
-      notional: pickLinkedStr(lr.r, ['notional']) !== '—' ? pickLinkedStr(lr.r, ['notional']) : null,
-      margin: pickLinkedStr(lr.r, ['margin']) !== '—' ? pickLinkedStr(lr.r, ['margin']) : null,
-      mgn_ratio: pickLinkedStr(lr.r, ['mgnRatio']) !== '—' ? pickLinkedStr(lr.r, ['mgnRatio']) : null,
-      liq_px: pickLinkedStr(lr.r, ['liqPx']) !== '—' ? pickLinkedStr(lr.r, ['liqPx']) : null,
-    }
-    const tone = linkedPosPnlTone(lr.r)
-    const row = {
-      p: pseudo,
-      tone,
-      rowClass: rowClassFromPnlTone(tone),
-      badgeClass: badgeClassFromPnlTone(tone),
-    }
-    const rec = latestOpenSimByCcy.value.get(c) ?? latestSimByCcy.value.get(c) ?? null
-    out.push({ row, rec, source: 'mine' })
   }
   return out
 })
@@ -2569,10 +2467,6 @@ const eventPnlTone = (e: PositionEventRow): PnlTone => {
                     <th>加仓次数</th>
                     <th>减仓次数</th>
                     <th>追加保证金次数</th>
-                    <th class="nowrap sm">加仓</th>
-                    <th class="nowrap sm">减仓</th>
-                    <th class="nowrap sm">平仓</th>
-                    <th class="nowrap sm">反手</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -2592,67 +2486,6 @@ const eventPnlTone = (e: PositionEventRow): PnlTone => {
                     <td class="mono sm">{{ x.rec?.add_position_count ?? 0 }}</td>
                     <td class="mono sm">{{ x.rec?.reduce_position_count ?? 0 }}</td>
                     <td class="mono sm">{{ x.rec?.add_margin_count ?? 0 }}</td>
-                    <td class="nowrap sm">
-                      <button
-                        type="button"
-                        class="btn btn-sm btn-primary"
-                        :disabled="simActionRunningId === (x.rec?.id ?? -1)"
-                        @click="onPositionActionClick('add', x.rec ?? null, { pos_ccy: x.row.p.pos_ccy, pos_side: x.row.p.pos_side })"
-                      >
-                        {{ hasLinkedPositionForCcy(x.row.p.pos_ccy) ? '加仓' : '开仓' }}
-                      </button>
-                      <button
-                        v-if="!x.rec && x.source === 'snapshot'"
-                        type="button"
-                        class="btn btn-sm btn-primary"
-                        :disabled="snapshotFollowRunningPosId === x.row.p.pos_id"
-                        @click="onSnapshotFollowClick(x.row.p)"
-                      >
-                        开仓
-                      </button>
-                    </td>
-                    <td class="nowrap sm">
-                      <template v-if="x.source === 'snapshot' && !hasLinkedPositionForCcy(x.row.p.pos_ccy)">
-                        <span class="text-muted">—</span>
-                      </template>
-                      <button
-                        v-else
-                        type="button"
-                        class="btn btn-sm btn-warning"
-                        :disabled="simActionRunningId === (x.rec?.id ?? -1)"
-                        @click="onPositionActionClick('reduce', x.rec ?? null, { pos_ccy: x.row.p.pos_ccy, pos_side: x.row.p.pos_side })"
-                      >
-                        减仓
-                      </button>
-                    </td>
-                    <td class="nowrap sm">
-                      <template v-if="x.source === 'snapshot' && !hasLinkedPositionForCcy(x.row.p.pos_ccy)">
-                        <span class="text-muted">—</span>
-                      </template>
-                      <button
-                        v-else
-                        type="button"
-                        class="btn btn-sm btn-danger"
-                        :disabled="simActionRunningId === (x.rec?.id ?? -1)"
-                        @click="onPositionActionClick('close', x.rec ?? null, { pos_ccy: x.row.p.pos_ccy, pos_side: x.row.p.pos_side })"
-                      >
-                        平仓
-                      </button>
-                    </td>
-                    <td class="nowrap sm">
-                      <template v-if="x.source === 'snapshot' && !hasLinkedPositionForCcy(x.row.p.pos_ccy)">
-                        <span class="text-muted">—</span>
-                      </template>
-                      <button
-                        v-else
-                        type="button"
-                        class="btn btn-sm btn-secondary"
-                        :disabled="simActionRunningId === (x.rec?.id ?? -1)"
-                        @click="onPositionActionClick('reverse', x.rec ?? null, { pos_ccy: x.row.p.pos_ccy, pos_side: x.row.p.pos_side })"
-                      >
-                        反手
-                      </button>
-                    </td>
                   </tr>
                 </tbody>
               </table>
