@@ -53,12 +53,6 @@ type FollowCfgForm = {
   take_profit_ratio: number | null
   /** 止损收益率阈值（比例，0.1=10%） */
   stop_loss_ratio: number | null
-  /** true：真实交易（欧易私有接口）；false：仅模拟 */
-  live_trading_enabled: boolean
-  /** true：按资产比例开仓；false：按固定下注金额开仓 */
-  open_by_asset_ratio: boolean
-  /** 按资产比例开仓系数：最终比例=对方资产仓位占比×该系数 */
-  open_by_asset_ratio_coeff: number
 }
 
 type PositionEventRow = {
@@ -202,9 +196,6 @@ const followCfg = ref<FollowCfgForm>({
   close_margin_ratio_threshold: null,
   take_profit_ratio: null,
   stop_loss_ratio: null,
-  live_trading_enabled: false,
-  open_by_asset_ratio: false,
-  open_by_asset_ratio_coeff: 1,
 })
 const configSaving = ref(false)
 const configMsg = ref('')
@@ -496,7 +487,7 @@ async function runLinkedOkxTradeDataImpl(silent: boolean) {
 
 /** 悬停「跟单配置」标题时展示（不含已固定的按成本模式文案） */
 const followConfigSectionHint =
-  '本页保存的每条跟单记录独立生效。后台对每个勾选「启动追加」的跟单帐户单独协程，约每 1 秒拉取该帐户绑定 OKX 的永续持仓；当维持保证金率（mgnRatio）≤ 200% 时，按「下注金额 × 追加比例」自动追加逐仓保证金；「追加次数上限」仅在 ≤200% 的持续期间计数，mgnRatio 回到 &gt;200% 后清零。须同时勾选「启用真实交易」「启动追加」并绑定 API。关闭真实交易时不调欧易私有接口。可选 OKX_FOLLOW_REST_BASE、OKX_FOLLOW_USE_PAPER。'
+  '本页保存的每条跟单记录独立生效。后台对每个勾选「启动追加」的跟单帐户单独协程，约每 1 秒拉取该帐户绑定 OKX 的永续持仓；当维持保证金率（mgnRatio）≤ 200% 时，按「下注金额 × 追加比例」自动追加逐仓保证金；「追加次数上限」仅在 ≤200% 的持续期间计数，mgnRatio 回到 &gt;200% 后清零。当前跟单配置默认直接启用真实交易并按固定下注金额开仓（非资产比例）；须绑定 API 后生效。可选 OKX_FOLLOW_REST_BASE、OKX_FOLLOW_USE_PAPER。'
 
 /** 悬停「跟单仓位数」时展示 */
 const maxFollowPositionsLabelHint =
@@ -1134,9 +1125,6 @@ const syncFollowCfgFromCurrent = () => {
     close_margin_ratio_threshold: parseNum(c.close_margin_ratio_threshold),
     take_profit_ratio: parseNum(c.take_profit_ratio),
     stop_loss_ratio: parseNum(c.stop_loss_ratio),
-    live_trading_enabled: Boolean(c.live_trading_enabled),
-    open_by_asset_ratio: Boolean(c.open_by_asset_ratio),
-    open_by_asset_ratio_coeff: parseNum(c.open_by_asset_ratio_coeff) ?? 1,
   }
 }
 
@@ -1198,9 +1186,9 @@ const saveFollowConfig = async () => {
         close_margin_ratio_threshold: followCfg.value.close_margin_ratio_threshold,
         take_profit_ratio: followCfg.value.take_profit_ratio,
         stop_loss_ratio: followCfg.value.stop_loss_ratio,
-        live_trading_enabled: followCfg.value.live_trading_enabled,
-        open_by_asset_ratio: followCfg.value.open_by_asset_ratio,
-        open_by_asset_ratio_coeff: followCfg.value.open_by_asset_ratio_coeff,
+        live_trading_enabled: true,
+        open_by_asset_ratio: false,
+        open_by_asset_ratio_coeff: 1,
       }),
     })
     const data = (await res.json().catch(() => ({}))) as { detail?: string }
@@ -3027,40 +3015,6 @@ const eventPnlTone = (e: PositionEventRow): PnlTone => {
                   >跟单配置</span>
                 </h2>
                 <form class="follow-config-form" @submit.prevent="saveFollowConfig">
-                  <div class="form-check mb-3">
-                    <input
-                      id="fc-live-trading"
-                      v-model="followCfg.live_trading_enabled"
-                      class="form-check-input"
-                      type="checkbox"
-                    />
-                    <label class="form-check-label" for="fc-live-trading">启用真实交易</label>
-                  </div>
-                  <div class="form-check mb-3">
-                    <input
-                      id="fc-open-by-asset-ratio"
-                      v-model="followCfg.open_by_asset_ratio"
-                      class="form-check-input"
-                      type="checkbox"
-                    />
-                    <label class="form-check-label" for="fc-open-by-asset-ratio">
-                      按资产比例开仓
-                    </label>
-                  </div>
-                  <div class="mb-2">
-                    <label class="form-label mb-1" for="fc-open-by-asset-ratio-coeff">
-                      资产比例系数
-                    </label>
-                    <input
-                      id="fc-open-by-asset-ratio-coeff"
-                      v-model.number="followCfg.open_by_asset_ratio_coeff"
-                      type="number"
-                      min="0"
-                      step="0.01"
-                      class="form-control form-control-sm"
-                      placeholder="例如 0.5（对方10%，我方按5%开仓）"
-                    />
-                  </div>
                   <div class="mb-2">
                     <label
                       class="form-label mb-1 hint-cursor"
