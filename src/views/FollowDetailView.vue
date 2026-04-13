@@ -556,9 +556,17 @@ const loadSnapshot = async (silent = false) => {
   }
   try {
     const params = new URLSearchParams({ unique_name: un })
-    const res = await fetch(`${API_BASE}/follow-accounts/position-snapshot?${params}`, {
-      headers: authHeaders(),
-    })
+    const controller = new AbortController()
+    const timeout = setTimeout(() => controller.abort(), 1500)
+    let res: Response
+    try {
+      res = await fetch(`${API_BASE}/follow-accounts/position-snapshot?${params}`, {
+        headers: authHeaders(),
+        signal: controller.signal,
+      })
+    } finally {
+      clearTimeout(timeout)
+    }
     if (!res.ok) {
       if (!silent) {
         snapshotError.value = (await res.json().catch(() => ({}))).detail || `加载失败 (${res.status})`
@@ -570,6 +578,11 @@ const loadSnapshot = async (silent = false) => {
     snapshot.value = data && typeof data === 'object' ? data : null
   } catch (e: unknown) {
     if (!silent) {
+      if (e instanceof DOMException && e.name === 'AbortError') {
+        snapshotError.value = '请求超时'
+        snapshot.value = null
+        return
+      }
       snapshotError.value = e instanceof Error ? e.message : '网络错误'
       snapshot.value = null
     }
