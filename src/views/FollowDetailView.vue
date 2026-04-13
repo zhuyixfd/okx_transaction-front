@@ -14,7 +14,7 @@ type FollowRow = {
   last_enabled_at: string | null
   created_at: string
   positions_refreshed_at: string | null
-  bet_amount_per_position?: number | string | null
+  single_add_margin_usdt?: number | string | null
   max_follow_positions?: number | null
   bet_mode?: string
   margin_add_ratio_of_bet?: number | string | null
@@ -26,8 +26,7 @@ type FollowRow = {
   stop_loss_ratio?: number | string | null
   okx_api_account_id?: number | null
   live_trading_enabled?: boolean
-  open_by_asset_ratio?: boolean
-  open_by_asset_ratio_coeff?: number | string | null
+  position_size_coeff?: number | string | null
 }
 
 type OkxApiListRow = {
@@ -39,10 +38,8 @@ type OkxApiListRow = {
 }
 
 type FollowCfgForm = {
-  bet_amount_per_position: number | null
+  single_add_margin_usdt: number | null
   max_follow_positions: number | null
-  margin_add_ratio_of_bet: number
-  margin_auto_enabled: boolean
   /** 追加次数上限；null 表示不限制 */
   margin_add_max_times: number | null
   /** 维持保证金率阈值（比例，2=200%） */
@@ -53,6 +50,8 @@ type FollowCfgForm = {
   take_profit_ratio: number | null
   /** 止损收益率阈值（比例，0.1=10%） */
   stop_loss_ratio: number | null
+  /** 持仓量系数：我方下单张数=对方持仓张数×该系数 */
+  position_size_coeff: number
 }
 
 type PositionEventRow = {
@@ -187,15 +186,14 @@ const simRealizedSum = ref('')
 const simUnrealizedSum = ref('')
 
 const followCfg = ref<FollowCfgForm>({
-  bet_amount_per_position: null,
+  single_add_margin_usdt: null,
   max_follow_positions: null,
-  margin_add_ratio_of_bet: 0.2,
-  margin_auto_enabled: false,
   margin_add_max_times: null,
   maint_margin_ratio_threshold: null,
   close_margin_ratio_threshold: null,
   take_profit_ratio: null,
   stop_loss_ratio: null,
+  position_size_coeff: 0.1,
 })
 const configSaving = ref(false)
 const configMsg = ref('')
@@ -487,7 +485,7 @@ async function runLinkedOkxTradeDataImpl(silent: boolean) {
 
 /** 悬停「跟单配置」标题时展示（不含已固定的按成本模式文案） */
 const followConfigSectionHint =
-  '本页保存的每条跟单记录独立生效。后台对每个勾选「启动追加」的跟单帐户单独协程，约每 1 秒拉取该帐户绑定 OKX 的永续持仓；当维持保证金率（mgnRatio）≤ 200% 时，按「下注金额 × 追加比例」自动追加逐仓保证金；「追加次数上限」仅在 ≤200% 的持续期间计数，mgnRatio 回到 &gt;200% 后清零。当前跟单配置默认直接启用真实交易并按固定下注金额开仓（非资产比例）；须绑定 API 后生效。可选 OKX_FOLLOW_REST_BASE、OKX_FOLLOW_USE_PAPER。'
+  '本页保存的每条跟单记录独立生效。后台对每个跟单帐户单独协程，约每 1 秒拉取该帐户绑定 OKX 的永续持仓；当维持保证金率（mgnRatio）≤ 200% 时，按「单次增加保证金（USDT）」自动追加逐仓保证金；「增加保证金次数上限」仅在 ≤200% 的持续期间计数，mgnRatio 回到 &gt;200% 后清零。当前跟单配置默认直接启用真实交易与自动追加；开仓按「持仓量系数」跟随（我方张数=对方张数×系数）。须绑定 API 后生效。可选 OKX_FOLLOW_REST_BASE、OKX_FOLLOW_USE_PAPER。'
 
 /** 悬停「跟单仓位数」时展示 */
 const maxFollowPositionsLabelHint =
@@ -1116,15 +1114,14 @@ const syncFollowCfgFromCurrent = () => {
   const c = current.value
   if (!c) return
   followCfg.value = {
-    bet_amount_per_position: parseNum(c.bet_amount_per_position),
+    single_add_margin_usdt: parseNum(c.single_add_margin_usdt),
     max_follow_positions: parseNum(c.max_follow_positions),
-    margin_add_ratio_of_bet: parseNum(c.margin_add_ratio_of_bet) ?? 0.2,
-    margin_auto_enabled: Boolean(c.margin_auto_enabled),
     margin_add_max_times: parseNum(c.margin_add_max_times),
     maint_margin_ratio_threshold: parseNum(c.maint_margin_ratio_threshold),
     close_margin_ratio_threshold: parseNum(c.close_margin_ratio_threshold),
     take_profit_ratio: parseNum(c.take_profit_ratio),
     stop_loss_ratio: parseNum(c.stop_loss_ratio),
+    position_size_coeff: parseNum(c.position_size_coeff) ?? 0.1,
   }
 }
 
@@ -1176,11 +1173,9 @@ const saveFollowConfig = async () => {
       method: 'PATCH',
       headers: authHeaders(),
       body: JSON.stringify({
-        bet_amount_per_position: followCfg.value.bet_amount_per_position,
+        single_add_margin_usdt: followCfg.value.single_add_margin_usdt,
         max_follow_positions: followCfg.value.max_follow_positions,
         bet_mode: 'cost',
-        margin_add_ratio_of_bet: followCfg.value.margin_add_ratio_of_bet,
-        margin_auto_enabled: followCfg.value.margin_auto_enabled,
         margin_add_max_times: followCfg.value.margin_add_max_times,
         maint_margin_ratio_threshold: followCfg.value.maint_margin_ratio_threshold,
         close_margin_ratio_threshold: followCfg.value.close_margin_ratio_threshold,
@@ -1188,7 +1183,7 @@ const saveFollowConfig = async () => {
         stop_loss_ratio: followCfg.value.stop_loss_ratio,
         live_trading_enabled: true,
         open_by_asset_ratio: false,
-        open_by_asset_ratio_coeff: 1,
+        position_size_coeff: followCfg.value.position_size_coeff,
       }),
     })
     const data = (await res.json().catch(() => ({}))) as { detail?: string }
@@ -3033,32 +3028,33 @@ const eventPnlTone = (e: PositionEventRow): PnlTone => {
                     />
                   </div>
                   <div class="mb-2">
-                    <label class="form-label mb-1" for="fc-bet">下注金额</label>
+                    <label class="form-label mb-1" for="fc-single-add-margin">
+                      单次增加保证金（USDT）
+                    </label>
                     <input
-                      id="fc-bet"
-                      v-model.number="followCfg.bet_amount_per_position"
+                      id="fc-single-add-margin"
+                      v-model.number="followCfg.single_add_margin_usdt"
                       type="number"
                       min="0"
                       step="any"
                       class="form-control form-control-sm"
-                      placeholder="用于保证金追加计算"
+                      placeholder="例如 20（每次自动追加 20 USDT）"
                     />
                   </div>
                   <div class="mb-2">
-                    <label class="form-label mb-1" for="fc-add">追加比例</label>
+                    <label class="form-label mb-1" for="fc-pos-size-coeff">持仓量系数</label>
                     <input
-                      id="fc-add"
-                      v-model.number="followCfg.margin_add_ratio_of_bet"
+                      id="fc-pos-size-coeff"
+                      v-model.number="followCfg.position_size_coeff"
                       type="number"
                       min="0"
-                      max="1"
                       step="0.01"
                       class="form-control form-control-sm"
-                      placeholder="例如 0.2 表示追加「下注金额 × 20%」"
+                      placeholder="例如 0.1（对方100张，我方下10张）"
                     />
                   </div>
                   <div class="mb-2">
-                    <label class="form-label mb-1" for="fc-margin-max-times">追加次数上限</label>
+                    <label class="form-label mb-1" for="fc-margin-max-times">增加保证金次数上限</label>
                     <input
                       id="fc-margin-max-times"
                       type="number"
@@ -3120,20 +3116,8 @@ const eventPnlTone = (e: PositionEventRow): PnlTone => {
                     />
                   </div>
                   <p class="small text-muted mb-2">
-                    维持保证金率 ≤ 200% 时自动追加，金额 = 下注金额 × 追加比例；每条跟单约每 1 秒独立轮询绑定
-                    OKX，与「启动追加」「真实交易」「绑定 API」联动。
+                    维持保证金率 ≤ 200% 时自动追加，金额 = 单次增加保证金（USDT）；每条跟单约每 1 秒独立轮询绑定 OKX。
                   </p>
-                  <div class="form-check mb-3">
-                    <input
-                      id="fc-margin-auto"
-                      v-model="followCfg.margin_auto_enabled"
-                      class="form-check-input"
-                      type="checkbox"
-                    />
-                    <label class="form-check-label" for="fc-margin-auto">
-                      启动追加
-                    </label>
-                  </div>
                   <div class="d-flex flex-wrap align-items-center gap-2">
                     <button
                       type="submit"
