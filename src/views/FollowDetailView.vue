@@ -192,7 +192,7 @@ let eventsPolledAtMs = 0
 const OVERVIEW_POLL_MS = 5000
 let overviewPolledAtMs = 0
 const SNAPSHOT_POLL_MS = 800
-const LINKED_OKX_POLL_MS = 2000
+const LINKED_OKX_POLL_MS = 800
 let linkedOkxPolledAtMs = 0
 const LIST_POLL_MS = 5000
 let listPolledAtMs = 0
@@ -448,7 +448,7 @@ const simRecordsSectionHint =
 
 /** 悬停「跟单持仓」：本人绑定 OKX 的永续持仓 */
 const followMyPositionsSectionHint =
-  '数据来自欧易私有接口 GET /api/v5/account/positions（SWAP），使用本页绑定的 API 密钥；与「对方持仓」社区接口、与「模拟跟单资金」表均无关。整页约每 2 秒拉取持仓与余额（轻量）；成交/账单/历史在独立队列串行，不拖慢「更新时间」。'
+  '数据来自欧易私有接口 GET /api/v5/account/positions（SWAP），使用本页绑定的 API 密钥；与「对方持仓」社区接口、与「模拟跟单资金」表均无关。整页约每 0.8 秒拉取持仓（余额约每 5 秒）；成交/账单/历史在独立队列串行，不拖慢「更新时间」。'
 
 /** 悬停「开仓 / 平仓记录」标题 */
 const eventsSectionHint =
