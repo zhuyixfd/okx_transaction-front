@@ -189,6 +189,7 @@ const SIM_RECORDS_POLL_MS = 5000
 let simRecordsPolledAtMs = 0
 const OVERVIEW_POLL_MS = 5000
 let overviewPolledAtMs = 0
+const MAIN_POLL_MS = 2000
 const LIST_POLL_MS = 5000
 let listPolledAtMs = 0
 const OKX_API_LIST_POLL_MS = 5000
@@ -435,7 +436,7 @@ const maxFollowPositionsLabelHint =
 
 /** 悬停「当前持仓」标题 */
 const snapshotSectionHint =
-  '整页约每 0.8 秒静默请求快照接口。标记价来自库表 follow_position_snapshots，启用时由后台轮询更新。'
+  '整页约每 2 秒静默请求快照接口。标记价来自库表 follow_position_snapshots，启用时由后台轮询更新。'
 
 /** 悬停「模拟跟单资金」标题（follow_sim_records） */
 const simRecordsSectionHint =
@@ -443,11 +444,11 @@ const simRecordsSectionHint =
 
 /** 悬停「跟单持仓」：本人绑定 OKX 的永续持仓 */
 const followMyPositionsSectionHint =
-  '数据来自欧易私有接口 GET /api/v5/account/positions（SWAP），使用本页绑定的 API 密钥；与「对方持仓」社区接口、与「模拟跟单资金」表均无关。整页约每 0.8 秒拉取持仓与余额（轻量）；成交/账单/历史在独立队列串行，不拖慢「更新时间」。'
+  '数据来自欧易私有接口 GET /api/v5/account/positions（SWAP），使用本页绑定的 API 密钥；与「对方持仓」社区接口、与「模拟跟单资金」表均无关。整页约每 2 秒拉取持仓与余额（轻量）；成交/账单/历史在独立队列串行，不拖慢「更新时间」。'
 
 /** 悬停「开仓 / 平仓记录」标题 */
 const eventsSectionHint =
-  '整页约每 0.8 秒静默刷新当前页数据。仅当 posId 出现/消失时写入记录；本表仅展示已平仓记录。'
+  '整页约每 2 秒静默刷新当前页数据。仅当 posId 出现/消失时写入记录；本表仅展示已平仓记录。'
 
 let pollTimer: ReturnType<typeof setInterval> | null = null
 
@@ -711,7 +712,7 @@ onMounted(() => {
       void loadOkxApiList(true)
     }
     void loadLinkedOkxTradeData(true)
-  }, 800)
+  }, MAIN_POLL_MS)
 })
 
 onUnmounted(() => {
