@@ -221,6 +221,7 @@ const linkedAvailBalanceUsdt = ref<string | null>(null)
 let linkedFillsBillsFetchedAtMs = 0
 let linkedPosHistoryFetchedAtMs = 0
 let linkedAssetBalanceFetchedAtMs = 0
+const LINKED_ACCOUNT_BALANCE_POLL_MS = 5000
 const linkedOkxErr = ref('')
 /** 成交/账单/历史串行，避免重叠写表；不阻塞轻量持仓路 */
 let linkedOkxHeavySerial: Promise<void> = Promise.resolve()
@@ -324,7 +325,7 @@ async function runLinkedOkxTradeDataImpl(silent: boolean) {
   if (!silent) linkedOkxErr.value = ''
   const q = new URLSearchParams({ unique_name: un })
   const nowMs = Date.now()
-  const needBalFetch = !silent || nowMs - linkedAssetBalanceFetchedAtMs >= 800
+  const needBalFetch = !silent || nowMs - linkedAssetBalanceFetchedAtMs >= LINKED_ACCOUNT_BALANCE_POLL_MS
 
   const lightPromise = (async (): Promise<{
     pRes: Response
