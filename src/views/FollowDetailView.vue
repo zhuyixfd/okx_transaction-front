@@ -557,7 +557,7 @@ const loadSnapshot = async (silent = false) => {
   try {
     const params = new URLSearchParams({ unique_name: un })
     const controller = new AbortController()
-    const timeout = setTimeout(() => controller.abort(), 1500)
+    const timeout = setTimeout(() => controller.abort(), 10000)
     let res: Response
     try {
       res = await fetch(`${API_BASE}/follow-accounts/position-snapshot?${params}`, {
