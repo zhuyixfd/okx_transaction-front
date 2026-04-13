@@ -186,6 +186,8 @@ const simRealizedSum = ref('')
 const simUnrealizedSum = ref('')
 const SIM_RECORDS_POLL_MS = 5000
 let simRecordsPolledAtMs = 0
+const OVERVIEW_POLL_MS = 5000
+let overviewPolledAtMs = 0
 
 const followCfg = ref<FollowCfgForm>({
   single_add_margin_usdt: null,
@@ -676,7 +678,10 @@ onMounted(() => {
     const nowMs = Date.now()
     void loadEvents(true)
     void loadSnapshot(true)
-    void loadOverviewData(true)
+    if (nowMs - overviewPolledAtMs >= OVERVIEW_POLL_MS) {
+      overviewPolledAtMs = nowMs
+      void loadOverviewData(true)
+    }
     if (nowMs - simRecordsPolledAtMs >= SIM_RECORDS_POLL_MS) {
       simRecordsPolledAtMs = nowMs
       void loadSimRecords(true)
