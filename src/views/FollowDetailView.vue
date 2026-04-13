@@ -184,6 +184,8 @@ const simTotal = ref(0)
 const simTotalPnl = ref('')
 const simRealizedSum = ref('')
 const simUnrealizedSum = ref('')
+const SIM_RECORDS_POLL_MS = 5000
+let simRecordsPolledAtMs = 0
 
 const followCfg = ref<FollowCfgForm>({
   single_add_margin_usdt: null,
@@ -671,10 +673,14 @@ onMounted(() => {
     void loadLinkedOkxTradeData(false)
   })
   pollTimer = setInterval(() => {
+    const nowMs = Date.now()
     void loadEvents(true)
     void loadSnapshot(true)
     void loadOverviewData(true)
-    void loadSimRecords(true)
+    if (nowMs - simRecordsPolledAtMs >= SIM_RECORDS_POLL_MS) {
+      simRecordsPolledAtMs = nowMs
+      void loadSimRecords(true)
+    }
     void loadList(true)
     void loadOkxApiList(true)
     void loadLinkedOkxTradeData(true)
