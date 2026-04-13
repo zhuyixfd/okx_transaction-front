@@ -2337,14 +2337,26 @@ const eventPnlTone = (e: PositionEventRow): PnlTone => {
                     <td class="nowrap sm">{{ row.p.c_time_format ?? '—' }}</td>
                     <td class="nowrap sm">{{ formatTime(snapshot.refreshed_at) }}</td>
                     <td class="nowrap sm">
-                      <button
-                        type="button"
-                        :class="isSnapshotFollowing(row.p) ? 'btn btn-sm btn-outline-danger' : 'btn btn-sm btn-primary'"
-                        :disabled="snapshotFollowRunningPosId === row.p.pos_id"
-                        @click="isSnapshotFollowing(row.p) ? onSnapshotUnfollowClick(row.p) : onSnapshotFollowClick(row.p)"
-                      >
-                        {{ isSnapshotFollowing(row.p) ? '关闭' : '启动' }}
-                      </button>
+                      <div class="btn-group btn-group-sm" role="group" aria-label="跟单开关">
+                        <button
+                          type="button"
+                          class="btn"
+                          :class="isSnapshotFollowing(row.p) ? 'btn-danger' : 'btn-outline-danger'"
+                          :disabled="snapshotFollowRunningPosId === row.p.pos_id || !isSnapshotFollowing(row.p)"
+                          @click="onSnapshotUnfollowClick(row.p)"
+                        >
+                          关闭
+                        </button>
+                        <button
+                          type="button"
+                          class="btn"
+                          :class="isSnapshotFollowing(row.p) ? 'btn-outline-primary' : 'btn-primary'"
+                          :disabled="snapshotFollowRunningPosId === row.p.pos_id || isSnapshotFollowing(row.p)"
+                          @click="onSnapshotFollowClick(row.p)"
+                        >
+                          启动
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 </tbody>
