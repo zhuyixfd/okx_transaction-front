@@ -1571,6 +1571,22 @@ const linkedPosRowsDecorated = computed(() =>
 const simRecordDeletingId = ref<number | null>(null)
 const simActionRunningId = ref<number | null>(null)
 const snapshotFollowRunningPosId = ref<string | null>(null)
+const snapshotFollowLatestByPosId = computed(() => {
+  const m = new Map<string, FollowSimRecordRow>()
+  for (const r of simRecords.value) {
+    const pid = String(r.pos_id ?? '').trim()
+    if (!pid) continue
+    const prev = m.get(pid)
+    if (!prev || r.id > prev.id) m.set(pid, r)
+  }
+  return m
+})
+const isSnapshotFollowing = (p: PositionSnapshotRow): boolean => {
+  const pid = String(p.pos_id ?? '').trim()
+  if (!pid) return false
+  const rec = snapshotFollowLatestByPosId.value.get(pid)
+  return rec?.status === 'open'
+}
 
 const deleteSimRecord = async (r: FollowSimRecordRow) => {
   const un = paramUniqueName.value
@@ -1669,6 +1685,35 @@ const onSnapshotFollowClick = async (p: PositionSnapshotRow) => {
     if (!res.ok) {
       const d = body.detail
       simError.value = typeof d === 'string' ? d : d != null ? JSON.stringify(d) : `跟单失败 (${res.status})`
+      return
+    }
+    await Promise.all([loadSimRecords(true), loadLinkedOkxTradeData(true)])
+  } catch (e: unknown) {
+    simError.value = e instanceof Error ? e.message : '网络错误'
+  } finally {
+    snapshotFollowRunningPosId.value = null
+  }
+}
+
+const onSnapshotUnfollowClick = async (p: PositionSnapshotRow) => {
+  const un = paramUniqueName.value
+  const posId = String(p.pos_id ?? '').trim()
+  if (!un || !posId) return
+  snapshotFollowRunningPosId.value = posId
+  simError.value = ''
+  try {
+    const res = await fetch(`${API_BASE}/follow-accounts/snapshot-follow-stop`, {
+      method: 'POST',
+      headers: authHeaders(),
+      body: JSON.stringify({
+        unique_name: un,
+        pos_id: posId,
+      }),
+    })
+    const body = (await res.json().catch(() => ({}))) as { detail?: unknown }
+    if (!res.ok) {
+      const d = body.detail
+      simError.value = typeof d === 'string' ? d : d != null ? JSON.stringify(d) : `关闭失败 (${res.status})`
       return
     }
     await Promise.all([loadSimRecords(true), loadLinkedOkxTradeData(true)])
@@ -2293,15 +2338,13 @@ const eventPnlTone = (e: PositionEventRow): PnlTone => {
                     <td class="nowrap sm">{{ formatTime(snapshot.refreshed_at) }}</td>
                     <td class="nowrap sm">
                       <button
-                        v-if="!hasLinkedPositionForCcy(row.p.pos_ccy)"
                         type="button"
-                        class="btn btn-sm btn-primary"
+                        :class="isSnapshotFollowing(row.p) ? 'btn btn-sm btn-outline-danger' : 'btn btn-sm btn-primary'"
                         :disabled="snapshotFollowRunningPosId === row.p.pos_id"
-                        @click="onSnapshotFollowClick(row.p)"
+                        @click="isSnapshotFollowing(row.p) ? onSnapshotUnfollowClick(row.p) : onSnapshotFollowClick(row.p)"
                       >
-                        跟单
+                        {{ isSnapshotFollowing(row.p) ? '关闭' : '启动' }}
                       </button>
-                      <span v-else class="text-muted">—</span>
                     </td>
                   </tr>
                 </tbody>
