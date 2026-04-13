@@ -187,9 +187,13 @@ const simRealizedSum = ref('')
 const simUnrealizedSum = ref('')
 const SIM_RECORDS_POLL_MS = 5000
 let simRecordsPolledAtMs = 0
+const EVENTS_POLL_MS = 5000
+let eventsPolledAtMs = 0
 const OVERVIEW_POLL_MS = 5000
 let overviewPolledAtMs = 0
-const MAIN_POLL_MS = 2000
+const SNAPSHOT_POLL_MS = 800
+const LINKED_OKX_POLL_MS = 2000
+let linkedOkxPolledAtMs = 0
 const LIST_POLL_MS = 5000
 let listPolledAtMs = 0
 const OKX_API_LIST_POLL_MS = 5000
@@ -436,7 +440,7 @@ const maxFollowPositionsLabelHint =
 
 /** 悬停「当前持仓」标题 */
 const snapshotSectionHint =
-  '整页约每 2 秒静默请求快照接口。标记价来自库表 follow_position_snapshots，启用时由后台轮询更新。'
+  '整页约每 0.8 秒静默请求快照接口。标记价来自库表 follow_position_snapshots，启用时由后台轮询更新。'
 
 /** 悬停「模拟跟单资金」标题（follow_sim_records） */
 const simRecordsSectionHint =
@@ -448,7 +452,7 @@ const followMyPositionsSectionHint =
 
 /** 悬停「开仓 / 平仓记录」标题 */
 const eventsSectionHint =
-  '整页约每 2 秒静默刷新当前页数据。仅当 posId 出现/消失时写入记录；本表仅展示已平仓记录。'
+  '整页约每 5 秒静默刷新当前页数据。仅当 posId 出现/消失时写入记录；本表仅展示已平仓记录。'
 
 let pollTimer: ReturnType<typeof setInterval> | null = null
 
@@ -693,7 +697,10 @@ onMounted(() => {
   })
   pollTimer = setInterval(() => {
     const nowMs = Date.now()
-    void loadEvents(true)
+    if (nowMs - eventsPolledAtMs >= EVENTS_POLL_MS) {
+      eventsPolledAtMs = nowMs
+      void loadEvents(true)
+    }
     void loadSnapshot(true)
     if (nowMs - overviewPolledAtMs >= OVERVIEW_POLL_MS) {
       overviewPolledAtMs = nowMs
@@ -711,8 +718,11 @@ onMounted(() => {
       okxApiListPolledAtMs = nowMs
       void loadOkxApiList(true)
     }
-    void loadLinkedOkxTradeData(true)
-  }, MAIN_POLL_MS)
+    if (nowMs - linkedOkxPolledAtMs >= LINKED_OKX_POLL_MS) {
+      linkedOkxPolledAtMs = nowMs
+      void loadLinkedOkxTradeData(true)
+    }
+  }, SNAPSHOT_POLL_MS)
 })
 
 onUnmounted(() => {
