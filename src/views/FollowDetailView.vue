@@ -455,6 +455,7 @@ const eventsSectionHint =
   '整页约每 5 秒静默刷新当前页数据。仅当 posId 出现/消失时写入记录；本表仅展示已平仓记录。'
 
 let pollTimer: ReturnType<typeof setInterval> | null = null
+let snapshotPollTimer: ReturnType<typeof setInterval> | null = null
 
 const authHeaders = (): HeadersInit => {
   const h: Record<string, string> = { 'Content-Type': 'application/json' }
@@ -708,13 +709,18 @@ onMounted(() => {
     void loadSimRecords(false)
     void loadLinkedOkxTradeData(false)
   })
+  // 对方持仓：单独轮询通道（独立于其它接口节奏）
+  snapshotPollTimer = setInterval(() => {
+    void loadSnapshot(true)
+  }, SNAPSHOT_POLL_MS)
+
+  // 其余数据走主轮询通道
   pollTimer = setInterval(() => {
     const nowMs = Date.now()
     if (nowMs - eventsPolledAtMs >= EVENTS_POLL_MS) {
       eventsPolledAtMs = nowMs
       void loadEvents(true)
     }
-    void loadSnapshot(true)
     if (nowMs - overviewPolledAtMs >= OVERVIEW_POLL_MS) {
       overviewPolledAtMs = nowMs
       void loadOverviewData(true)
@@ -742,6 +748,10 @@ onUnmounted(() => {
   if (pollTimer) {
     clearInterval(pollTimer)
     pollTimer = null
+  }
+  if (snapshotPollTimer) {
+    clearInterval(snapshotPollTimer)
+    snapshotPollTimer = null
   }
 })
 
