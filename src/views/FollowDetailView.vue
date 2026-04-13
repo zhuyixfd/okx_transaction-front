@@ -1724,6 +1724,12 @@ const onSnapshotUnfollowClick = async (p: PositionSnapshotRow) => {
   }
 }
 
+const onSnapshotFollowToggle = async (p: PositionSnapshotRow, ev: Event) => {
+  const checked = (ev.target as HTMLInputElement).checked
+  if (checked) await onSnapshotFollowClick(p)
+  else await onSnapshotUnfollowClick(p)
+}
+
 const simRecordsSorted = computed(() =>
   [...simRecords.value].sort((a, b) => {
     const c = comparePosCcy(a.pos_ccy, b.pos_ccy)
@@ -2337,25 +2343,19 @@ const eventPnlTone = (e: PositionEventRow): PnlTone => {
                     <td class="nowrap sm">{{ row.p.c_time_format ?? '—' }}</td>
                     <td class="nowrap sm">{{ formatTime(snapshot.refreshed_at) }}</td>
                     <td class="nowrap sm">
-                      <div class="btn-group btn-group-sm" role="group" aria-label="跟单开关">
-                        <button
-                          type="button"
-                          class="btn"
-                          :class="isSnapshotFollowing(row.p) ? 'btn-danger' : 'btn-outline-danger'"
-                          :disabled="snapshotFollowRunningPosId === row.p.pos_id || !isSnapshotFollowing(row.p)"
-                          @click="onSnapshotUnfollowClick(row.p)"
-                        >
-                          关闭
-                        </button>
-                        <button
-                          type="button"
-                          class="btn"
-                          :class="isSnapshotFollowing(row.p) ? 'btn-outline-primary' : 'btn-primary'"
-                          :disabled="snapshotFollowRunningPosId === row.p.pos_id || isSnapshotFollowing(row.p)"
-                          @click="onSnapshotFollowClick(row.p)"
-                        >
-                          启动
-                        </button>
+                      <div class="form-check form-switch mb-0 d-inline-flex align-items-center gap-1">
+                        <input
+                          :id="'snapshot-follow-' + row.p.pos_id"
+                          class="form-check-input"
+                          type="checkbox"
+                          role="switch"
+                          :checked="isSnapshotFollowing(row.p)"
+                          :disabled="snapshotFollowRunningPosId === row.p.pos_id"
+                          @change="onSnapshotFollowToggle(row.p, $event)"
+                        />
+                        <label class="form-check-label" :for="'snapshot-follow-' + row.p.pos_id">
+                          {{ isSnapshotFollowing(row.p) ? '启动' : '关闭' }}
+                        </label>
                       </div>
                     </td>
                   </tr>
