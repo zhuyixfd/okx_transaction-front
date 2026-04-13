@@ -2861,6 +2861,18 @@ const eventPnlTone = (e: PositionEventRow): PnlTone => {
                     />
                   </div>
                   <div class="mb-2">
+                    <label class="form-label mb-1" for="fc-pos-size-coeff">持仓量系数</label>
+                    <input
+                      id="fc-pos-size-coeff"
+                      v-model.number="followCfg.position_size_coeff"
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      class="form-control form-control-sm"
+                      placeholder="例如 0.1（对方100张，我方下10张）"
+                    />
+                  </div>
+                  <div class="mb-2">
                     <label class="form-label mb-1" for="fc-single-add-margin">
                       单次增加保证金（USDT）
                     </label>
@@ -2872,18 +2884,6 @@ const eventPnlTone = (e: PositionEventRow): PnlTone => {
                       step="any"
                       class="form-control form-control-sm"
                       placeholder="例如 20（每次自动追加 20 USDT）"
-                    />
-                  </div>
-                  <div class="mb-2">
-                    <label class="form-label mb-1" for="fc-pos-size-coeff">持仓量系数</label>
-                    <input
-                      id="fc-pos-size-coeff"
-                      v-model.number="followCfg.position_size_coeff"
-                      type="number"
-                      min="0"
-                      step="0.01"
-                      class="form-control form-control-sm"
-                      placeholder="例如 0.1（对方100张，我方下10张）"
                     />
                   </div>
                   <div class="mb-2">
