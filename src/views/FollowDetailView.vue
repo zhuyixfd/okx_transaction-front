@@ -218,8 +218,6 @@ let linkedFillsBillsFetchedAtMs = 0
 let linkedPosHistoryFetchedAtMs = 0
 let linkedAssetBalanceFetchedAtMs = 0
 const linkedOkxErr = ref('')
-/** 持仓+余额轻量拉取并发序号：丢弃过期轻量包，避免乱序覆盖 */
-let linkedOkxLightSeq = 0
 /** 成交/账单/历史串行，避免重叠写表；不阻塞轻量持仓路 */
 let linkedOkxHeavySerial: Promise<void> = Promise.resolve()
 const linkedFillsPage = ref(1)
@@ -305,7 +303,6 @@ async function runLinkedOkxTradeDataImpl(silent: boolean) {
   const un = paramUniqueName.value
   const c = current.value
   if (!un || !c?.okx_api_account_id) {
-    linkedOkxLightSeq += 1
     linkedOkxHeavySerial = Promise.resolve()
     linkedFillsRows.value = []
     linkedBillsRows.value = []
@@ -324,8 +321,6 @@ async function runLinkedOkxTradeDataImpl(silent: boolean) {
   const q = new URLSearchParams({ unique_name: un })
   const nowMs = Date.now()
   const needBalFetch = !silent || nowMs - linkedAssetBalanceFetchedAtMs >= 800
-
-  const lightSeq = ++linkedOkxLightSeq
 
   const lightPromise = (async (): Promise<{
     pRes: Response
@@ -349,9 +344,6 @@ async function runLinkedOkxTradeDataImpl(silent: boolean) {
         aRes.json().catch(() => ({})),
       ])
       if (paramUniqueName.value !== startUn || current.value?.okx_api_account_id !== startOkxId) {
-        return null
-      }
-      if (lightSeq !== linkedOkxLightSeq) {
         return null
       }
       if (pRes.ok) {
@@ -397,11 +389,7 @@ async function runLinkedOkxTradeDataImpl(silent: boolean) {
     }
     if (!lo) {
       if (!silent) {
-        if (lightSeq !== linkedOkxLightSeq) {
-          // 新一轮轻量请求已发起，本包作废，不覆盖错误提示
-        } else {
-          linkedOkxErr.value = '持仓或余额加载失败'
-        }
+        linkedOkxErr.value = '持仓或余额加载失败'
       }
       return
     }
