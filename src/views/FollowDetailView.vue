@@ -2417,9 +2417,7 @@ const eventPnlTone = (e: PositionEventRow): PnlTone => {
                           :disabled="snapshotFollowRunningPosId === row.p.pos_id"
                           @change="onSnapshotFollowToggle(row.p, $event)"
                         />
-                        <label class="form-check-label" :for="'snapshot-follow-' + row.p.pos_id">
-                          {{ isSnapshotFollowing(row.p) ? '启动' : '关闭' }}
-                        </label>
+                        <label class="form-check-label" :for="'snapshot-follow-' + row.p.pos_id"></label>
                       </div>
                     </td>
                   </tr>
