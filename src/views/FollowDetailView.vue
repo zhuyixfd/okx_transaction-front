@@ -2984,7 +2984,7 @@ const eventPnlTone = (e: PositionEventRow): PnlTone => {
                       v-model.number="followCfg.position_size_coeff"
                       type="number"
                       min="0"
-                      step="0.01"
+                      step="0.001"
                       class="form-control form-control-sm"
                       placeholder="例如 0.1（对方100张，我方下10张）"
                     />
