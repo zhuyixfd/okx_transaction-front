@@ -233,6 +233,7 @@ let linkedAssetBalanceFetchedAtMs = 0
 const LINKED_ACCOUNT_BALANCE_POLL_MS = 5000
 const linkedOkxErr = ref('')
 let linkedOkxInflight = false
+let linkedBalanceInflight = false
 /** 成交/账单/历史串行，避免重叠写表；不阻塞轻量持仓路 */
 let linkedOkxHeavySerial: Promise<void> = Promise.resolve()
 const linkedFillsPage = ref(1)
@@ -342,25 +343,13 @@ async function runLinkedOkxTradeDataImpl(silent: boolean) {
 
   const lightPromise = (async (): Promise<{
     pRes: Response
-    aRes: Response
     pj: unknown
-    aj: unknown
   } | null> => {
     try {
-      const [pRes, aRes] = await Promise.all([
-        fetch(`${API_BASE}/follow-accounts/linked-okx/positions?${q}&instType=SWAP`, {
-          headers: authHeaders(),
-        }),
-        needBalFetch
-          ? fetch(`${API_BASE}/follow-accounts/linked-okx/account-balance?${q}&ccy=USDT`, {
-              headers: authHeaders(),
-            })
-          : Promise.resolve(new Response(JSON.stringify({}), { status: 204 })),
-      ])
-      const [pj, aj] = await Promise.all([
-        pRes.json().catch(() => ({})),
-        aRes.json().catch(() => ({})),
-      ])
+      const pRes = await fetch(`${API_BASE}/follow-accounts/linked-okx/positions?${q}&instType=SWAP`, {
+        headers: authHeaders(),
+      })
+      const pj = await pRes.json().catch(() => ({}))
       if (paramUniqueName.value !== startUn || current.value?.okx_api_account_id !== startOkxId) {
         return null
       }
@@ -368,33 +357,7 @@ async function runLinkedOkxTradeDataImpl(silent: boolean) {
         linkedPosRows.value = _linkedDataArr(pRes, pj)
         linkedOkxFetchedAt.value = new Date().toISOString()
       }
-      if (aRes.ok) {
-        const data = (aj as { data?: unknown }).data
-        const first = Array.isArray(data) ? (data[0] as Record<string, unknown> | undefined) : undefined
-        const totalEq = first?.totalEq
-        linkedAssetBalanceUsdt.value =
-          totalEq == null || String(totalEq).trim() === '' ? null : String(totalEq)
-        const availEq = first?.availEq
-        let avail: string | null =
-          availEq == null || String(availEq).trim() === '' ? null : String(availEq)
-        if (avail == null) {
-          const details = first?.details
-          if (Array.isArray(details)) {
-            const usdt = details.find((x) => {
-              if (!x || typeof x !== 'object') return false
-              const ccy = (x as Record<string, unknown>).ccy
-              return String(ccy ?? '').trim().toUpperCase() === 'USDT'
-            }) as Record<string, unknown> | undefined
-            if (usdt) {
-              const v = usdt.availEq ?? usdt.availBal
-              avail = v == null || String(v).trim() === '' ? null : String(v)
-            }
-          }
-        }
-        linkedAvailBalanceUsdt.value = avail
-        linkedAssetBalanceFetchedAtMs = Date.now()
-      }
-      return { pRes, aRes, pj, aj }
+      return { pRes, pj }
     } catch {
       return null
     }
@@ -411,12 +374,11 @@ async function runLinkedOkxTradeDataImpl(silent: boolean) {
       }
       return
     }
-    const { pRes, aRes, pj, aj } = lo
+    const { pRes, pj } = lo
     if (!silent) {
       if (!pRes.ok) linkedOkxErr.value = _linkedErrText(pRes, pj)
-      else if (!aRes.ok) linkedOkxErr.value = _linkedErrText(aRes, aj)
       else linkedOkxErr.value = ''
-    } else if (pRes.ok && (aRes.ok || aRes.status === 204)) {
+    } else if (pRes.ok) {
       linkedOkxErr.value = ''
     }
   } catch (e: unknown) {
@@ -425,6 +387,49 @@ async function runLinkedOkxTradeDataImpl(silent: boolean) {
     }
     if (!silent) linkedOkxErr.value = e instanceof Error ? e.message : '网络错误'
   } finally {
+    if (needBalFetch && !linkedBalanceInflight) {
+      linkedBalanceInflight = true
+      void (async () => {
+        try {
+          const aRes = await fetch(`${API_BASE}/follow-accounts/linked-okx/account-balance?${q}&ccy=USDT`, {
+            headers: authHeaders(),
+          })
+          const aj = await aRes.json().catch(() => ({}))
+          if (paramUniqueName.value !== startUn || current.value?.okx_api_account_id !== startOkxId) {
+            return
+          }
+          if (!aRes.ok) return
+          const data = (aj as { data?: unknown }).data
+          const first = Array.isArray(data) ? (data[0] as Record<string, unknown> | undefined) : undefined
+          const totalEq = first?.totalEq
+          linkedAssetBalanceUsdt.value =
+            totalEq == null || String(totalEq).trim() === '' ? null : String(totalEq)
+          const availEq = first?.availEq
+          let avail: string | null =
+            availEq == null || String(availEq).trim() === '' ? null : String(availEq)
+          if (avail == null) {
+            const details = first?.details
+            if (Array.isArray(details)) {
+              const usdt = details.find((x) => {
+                if (!x || typeof x !== 'object') return false
+                const ccy = (x as Record<string, unknown>).ccy
+                return String(ccy ?? '').trim().toUpperCase() === 'USDT'
+              }) as Record<string, unknown> | undefined
+              if (usdt) {
+                const v = usdt.availEq ?? usdt.availBal
+                avail = v == null || String(v).trim() === '' ? null : String(v)
+              }
+            }
+          }
+          linkedAvailBalanceUsdt.value = avail
+          linkedAssetBalanceFetchedAtMs = Date.now()
+        } catch {
+          // 忽略余额静默刷新错误，避免影响持仓更新节奏
+        } finally {
+          linkedBalanceInflight = false
+        }
+      })()
+    }
     linkedOkxInflight = false
   }
 }
