@@ -3115,9 +3115,6 @@ const eventPnlTone = (e: PositionEventRow): PnlTone => {
                       placeholder="例如 0.1 表示 10%"
                     />
                   </div>
-                  <p class="small text-muted mb-2">
-                    维持保证金率 ≤ 200% 时自动追加，金额 = 单次增加保证金（USDT）；每条跟单约每 1 秒独立轮询绑定 OKX。
-                  </p>
                   <div class="d-flex flex-wrap align-items-center gap-2">
                     <button
                       type="submit"
