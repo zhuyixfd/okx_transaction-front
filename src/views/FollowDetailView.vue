@@ -171,6 +171,7 @@ const eventsTotal = ref(0)
 const snapshot = ref<PositionSnapshotPayload | null>(null)
 const snapshotLoading = ref(false)
 const snapshotError = ref('')
+let snapshotInflight = false
 const overviewEquity = ref<string | null>(null)
 
 const simRecords = ref<FollowSimRecordRow[]>([])
@@ -188,6 +189,10 @@ const SIM_RECORDS_POLL_MS = 5000
 let simRecordsPolledAtMs = 0
 const OVERVIEW_POLL_MS = 5000
 let overviewPolledAtMs = 0
+const LIST_POLL_MS = 5000
+let listPolledAtMs = 0
+const OKX_API_LIST_POLL_MS = 5000
+let okxApiListPolledAtMs = 0
 
 const followCfg = ref<FollowCfgForm>({
   single_add_margin_usdt: null,
@@ -223,6 +228,7 @@ let linkedPosHistoryFetchedAtMs = 0
 let linkedAssetBalanceFetchedAtMs = 0
 const LINKED_ACCOUNT_BALANCE_POLL_MS = 5000
 const linkedOkxErr = ref('')
+let linkedOkxInflight = false
 /** 成交/账单/历史串行，避免重叠写表；不阻塞轻量持仓路 */
 let linkedOkxHeavySerial: Promise<void> = Promise.resolve()
 const linkedFillsPage = ref(1)
@@ -305,6 +311,8 @@ const _linkedDataArr = (res: Response, j: unknown): Record<string, unknown>[] =>
 const loadLinkedOkxTradeData = (silent = false): Promise<void> => runLinkedOkxTradeDataImpl(silent)
 
 async function runLinkedOkxTradeDataImpl(silent: boolean) {
+  if (silent && linkedOkxInflight) return
+  linkedOkxInflight = true
   const un = paramUniqueName.value
   const c = current.value
   if (!un || !c?.okx_api_account_id) {
@@ -317,6 +325,7 @@ async function runLinkedOkxTradeDataImpl(silent: boolean) {
     linkedAssetBalanceUsdt.value = null
     linkedAvailBalanceUsdt.value = null
     if (!silent) linkedOkxErr.value = ''
+    linkedOkxInflight = false
     return
   }
   const startUn = un
@@ -411,6 +420,8 @@ async function runLinkedOkxTradeDataImpl(silent: boolean) {
       return
     }
     if (!silent) linkedOkxErr.value = e instanceof Error ? e.message : '网络错误'
+  } finally {
+    linkedOkxInflight = false
   }
 }
 
@@ -526,9 +537,12 @@ const loadEvents = async (silent = false) => {
 }
 
 const loadSnapshot = async (silent = false) => {
+  if (silent && snapshotInflight) return
+  snapshotInflight = true
   const un = paramUniqueName.value
   if (!un) {
     snapshot.value = null
+    snapshotInflight = false
     return
   }
   if (!silent) {
@@ -555,6 +569,7 @@ const loadSnapshot = async (silent = false) => {
       snapshot.value = null
     }
   } finally {
+    snapshotInflight = false
     if (!silent) snapshotLoading.value = false
   }
 }
@@ -687,8 +702,14 @@ onMounted(() => {
       simRecordsPolledAtMs = nowMs
       void loadSimRecords(true)
     }
-    void loadList(true)
-    void loadOkxApiList(true)
+    if (nowMs - listPolledAtMs >= LIST_POLL_MS) {
+      listPolledAtMs = nowMs
+      void loadList(true)
+    }
+    if (nowMs - okxApiListPolledAtMs >= OKX_API_LIST_POLL_MS) {
+      okxApiListPolledAtMs = nowMs
+      void loadOkxApiList(true)
+    }
     void loadLinkedOkxTradeData(true)
   }, 800)
 })
