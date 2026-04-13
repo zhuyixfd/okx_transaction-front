@@ -1647,9 +1647,9 @@ const snapshotFollowLatestByPosId = computed(() => {
 })
 const isSnapshotFollowing = (p: PositionSnapshotRow): boolean => {
   const pid = String(p.pos_id ?? '').trim()
-  if (!pid) return false
+  if (!pid) return true
   const rec = snapshotFollowLatestByPosId.value.get(pid)
-  return rec?.status === 'open'
+  return rec?.status !== 'closed'
 }
 
 const deleteSimRecord = async (r: FollowSimRecordRow) => {
