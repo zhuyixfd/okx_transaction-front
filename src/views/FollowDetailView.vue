@@ -193,7 +193,6 @@ const OVERVIEW_POLL_MS = 5000
 let overviewPolledAtMs = 0
 const SNAPSHOT_POLL_MS = 800
 const LINKED_OKX_POLL_MS = 800
-let linkedOkxPolledAtMs = 0
 const LIST_POLL_MS = 5000
 let listPolledAtMs = 0
 const OKX_API_LIST_POLL_MS = 5000
@@ -456,6 +455,7 @@ const eventsSectionHint =
 
 let pollTimer: ReturnType<typeof setInterval> | null = null
 let snapshotPollTimer: ReturnType<typeof setInterval> | null = null
+let linkedOkxPollTimer: ReturnType<typeof setInterval> | null = null
 
 const authHeaders = (): HeadersInit => {
   const h: Record<string, string> = { 'Content-Type': 'application/json' }
@@ -713,6 +713,10 @@ onMounted(() => {
   snapshotPollTimer = setInterval(() => {
     void loadSnapshot(true)
   }, SNAPSHOT_POLL_MS)
+  // 我的持仓：单独轮询通道，固定 0.8 秒触发
+  linkedOkxPollTimer = setInterval(() => {
+    void loadLinkedOkxTradeData(true)
+  }, LINKED_OKX_POLL_MS)
 
   // 其余数据走主轮询通道
   pollTimer = setInterval(() => {
@@ -737,10 +741,6 @@ onMounted(() => {
       okxApiListPolledAtMs = nowMs
       void loadOkxApiList(true)
     }
-    if (nowMs - linkedOkxPolledAtMs >= LINKED_OKX_POLL_MS) {
-      linkedOkxPolledAtMs = nowMs
-      void loadLinkedOkxTradeData(true)
-    }
   }, SNAPSHOT_POLL_MS)
 })
 
@@ -752,6 +752,10 @@ onUnmounted(() => {
   if (snapshotPollTimer) {
     clearInterval(snapshotPollTimer)
     snapshotPollTimer = null
+  }
+  if (linkedOkxPollTimer) {
+    clearInterval(linkedOkxPollTimer)
+    linkedOkxPollTimer = null
   }
 })
 
