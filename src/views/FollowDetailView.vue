@@ -1670,13 +1670,13 @@ const linkedPosRowsDecorated = computed(() =>
     }),
 )
 
-const myPositionOrderErrorLine = computed(() => {
+const myPositionOrderErrorLines = computed(() => {
   const ccySet = new Set<string>()
   for (const row of linkedPosRowsDecorated.value) {
     const ccy = instIdBaseCcy(pickLinkedStr(row.r, ['instId'])).toUpperCase()
     if (ccy && ccy !== '—') ccySet.add(ccy)
   }
-  if (ccySet.size === 0) return ''
+  if (ccySet.size === 0) return [] as string[]
 
   const latestByCcy = new Map<string, { id: number; msg: string }>()
   for (const r of simRecords.value) {
@@ -1687,12 +1687,11 @@ const myPositionOrderErrorLine = computed(() => {
     const prev = latestByCcy.get(ccy)
     if (!prev || r.id > prev.id) latestByCcy.set(ccy, { id: r.id, msg })
   }
-  if (latestByCcy.size === 0) return ''
+  if (latestByCcy.size === 0) return [] as string[]
 
-  const parts = [...latestByCcy.entries()]
+  return [...latestByCcy.entries()]
     .sort((a, b) => a[0].localeCompare(b[0], 'en', { sensitivity: 'base' }))
     .map(([ccy, v]) => `${ccy}：${v.msg}`)
-  return `下单失败：${parts.join('；')}`
 })
 
 /** 跟单记录：当前页内按币种排序（与持仓一致） */
@@ -2765,9 +2764,16 @@ const eventPnlTone = (e: PositionEventRow): PnlTone => {
                 </table>
               </div>
             </div>
-            <p v-if="myPositionOrderErrorLine" class="small text-danger mt-2 mb-0">
-              {{ myPositionOrderErrorLine }}
-            </p>
+            <div v-if="myPositionOrderErrorLines.length > 0" class="small text-danger mt-2 mb-0">
+              <p class="mb-1">下单失败：</p>
+              <p
+                v-for="line in myPositionOrderErrorLines"
+                :key="'my-pos-order-err-' + line"
+                class="mb-0"
+              >
+                {{ line }}
+              </p>
+            </div>
           </template>
         </section>
 
