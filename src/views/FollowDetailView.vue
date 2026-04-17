@@ -1670,6 +1670,31 @@ const linkedPosRowsDecorated = computed(() =>
     }),
 )
 
+const myPositionOrderErrorLine = computed(() => {
+  const ccySet = new Set<string>()
+  for (const row of linkedPosRowsDecorated.value) {
+    const ccy = instIdBaseCcy(pickLinkedStr(row.r, ['instId'])).toUpperCase()
+    if (ccy && ccy !== '—') ccySet.add(ccy)
+  }
+  if (ccySet.size === 0) return ''
+
+  const latestByCcy = new Map<string, { id: number; msg: string }>()
+  for (const r of simRecords.value) {
+    const msg = String(r.live_last_error ?? '').trim()
+    if (!msg) continue
+    const ccy = String(r.pos_ccy ?? '').trim().toUpperCase()
+    if (!ccy || !ccySet.has(ccy)) continue
+    const prev = latestByCcy.get(ccy)
+    if (!prev || r.id > prev.id) latestByCcy.set(ccy, { id: r.id, msg })
+  }
+  if (latestByCcy.size === 0) return ''
+
+  const parts = [...latestByCcy.entries()]
+    .sort((a, b) => a[0].localeCompare(b[0], 'en', { sensitivity: 'base' }))
+    .map(([ccy, v]) => `${ccy}：${v.msg}`)
+  return `下单失败：${parts.join('；')}`
+})
+
 /** 跟单记录：当前页内按币种排序（与持仓一致） */
 const simRecordDeletingId = ref<number | null>(null)
 const simActionRunningId = ref<number | null>(null)
@@ -2740,6 +2765,9 @@ const eventPnlTone = (e: PositionEventRow): PnlTone => {
                 </table>
               </div>
             </div>
+            <p v-if="myPositionOrderErrorLine" class="small text-danger mt-2 mb-0">
+              {{ myPositionOrderErrorLine }}
+            </p>
           </template>
         </section>
 
@@ -2768,7 +2796,6 @@ const eventPnlTone = (e: PositionEventRow): PnlTone => {
                     <th>加仓次数</th>
                     <th>减仓次数</th>
                     <th>追加保证金次数</th>
-                    <th>最近下单失败原因</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -2788,7 +2815,6 @@ const eventPnlTone = (e: PositionEventRow): PnlTone => {
                     <td class="mono sm">{{ x.rec?.add_position_count ?? 0 }}</td>
                     <td class="mono sm">{{ x.rec?.reduce_position_count ?? 0 }}</td>
                     <td class="mono sm">{{ x.rec?.add_margin_count ?? 0 }}</td>
-                    <td class="sm">{{ x.rec?.live_last_error ?? '—' }}</td>
                   </tr>
                 </tbody>
               </table>
