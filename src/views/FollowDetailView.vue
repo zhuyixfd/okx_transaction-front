@@ -1895,11 +1895,11 @@ const pauseSideRecords = computed(() => {
   return rows
 })
 const savePauseFollowConfig = async () => {
-  const un = paramUniqueName.value
+  const un = paramUniqueName.value || (current.value?.unique_name ?? '')
   const ccy = pauseCfgCcyInput.value.trim().toUpperCase()
   const side = pauseCfgSideInput.value
   if (!un || !ccy) {
-    pauseCfgMsg.value = '请先填写币种'
+    pauseCfgMsg.value = !ccy ? '请先填写币种' : '当前交易员标识缺失，请刷新页面后重试'
     return
   }
   pauseCfgSaving.value = true
@@ -1921,7 +1921,7 @@ const savePauseFollowConfig = async () => {
       return
     }
     pauseCfgMsg.value = '已保存'
-    await loadSimRecords(true)
+    await loadSimRecords(false)
   } catch (e: unknown) {
     pauseCfgMsg.value = e instanceof Error ? e.message : '网络错误'
   } finally {
@@ -1929,8 +1929,11 @@ const savePauseFollowConfig = async () => {
   }
 }
 const removePauseFollowSide = async (ccy: string, side: PauseFollowSide) => {
-  const un = paramUniqueName.value
-  if (!un) return
+  const un = paramUniqueName.value || (current.value?.unique_name ?? '')
+  if (!un) {
+    pauseCfgMsg.value = '当前交易员标识缺失，请刷新页面后重试'
+    return
+  }
   pauseCfgSaving.value = true
   pauseCfgMsg.value = ''
   try {
@@ -1950,7 +1953,7 @@ const removePauseFollowSide = async (ccy: string, side: PauseFollowSide) => {
       return
     }
     pauseCfgMsg.value = '已删除'
-    await loadSimRecords(true)
+    await loadSimRecords(false)
   } catch (e: unknown) {
     pauseCfgMsg.value = e instanceof Error ? e.message : '网络错误'
   } finally {
