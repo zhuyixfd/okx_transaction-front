@@ -3140,7 +3140,7 @@ const eventPnlTone = (e: PositionEventRow): PnlTone => {
                       v-model.number="followCfg.position_size_coeff"
                       type="number"
                       min="0"
-                      step="0.001"
+                      step="0.0001"
                       class="form-control form-control-sm"
                       placeholder="例如 0.1（对方100张，我方下10张）"
                     />
@@ -3154,7 +3154,7 @@ const eventPnlTone = (e: PositionEventRow): PnlTone => {
                       v-model.number="followCfg.single_add_margin_usdt"
                       type="number"
                       min="0"
-                      step="any"
+                      step="0.0001"
                       class="form-control form-control-sm"
                       placeholder="例如 20（每次自动追加 20 USDT）"
                     />
@@ -3180,7 +3180,7 @@ const eventPnlTone = (e: PositionEventRow): PnlTone => {
                       v-model.number="followCfg.maint_margin_ratio_threshold"
                       type="number"
                       min="0"
-                      step="any"
+                      step="0.0001"
                       class="form-control form-control-sm"
                       placeholder="例如 2 表示 200%"
                     />
@@ -3192,7 +3192,7 @@ const eventPnlTone = (e: PositionEventRow): PnlTone => {
                       v-model.number="followCfg.close_margin_ratio_threshold"
                       type="number"
                       min="0"
-                      step="any"
+                      step="0.0001"
                       class="form-control form-control-sm"
                       placeholder="例如 1.5 表示 150%"
                     />
@@ -3204,7 +3204,7 @@ const eventPnlTone = (e: PositionEventRow): PnlTone => {
                       v-model.number="followCfg.take_profit_ratio"
                       type="number"
                       min="0"
-                      step="any"
+                      step="0.0001"
                       class="form-control form-control-sm"
                       placeholder="例如 0.2 表示 20%"
                     />
@@ -3216,7 +3216,7 @@ const eventPnlTone = (e: PositionEventRow): PnlTone => {
                       v-model.number="followCfg.stop_loss_ratio"
                       type="number"
                       min="0"
-                      step="any"
+                      step="0.0001"
                       class="form-control form-control-sm"
                       placeholder="例如 0.1 表示 10%"
                     />
