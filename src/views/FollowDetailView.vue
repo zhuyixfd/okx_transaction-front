@@ -1656,6 +1656,32 @@ const snapshotFollowLatestByPosId = computed(() => {
   }
   return m
 })
+const snapshotFollowSideLatest = computed(() => {
+  const m = new Map<string, FollowSimRecordRow>()
+  for (const r of simRecords.value) {
+    const pid = String(r.pos_id ?? '').trim()
+    if (!pid.startsWith('__side_block__:')) continue
+    const prev = m.get(pid)
+    if (!prev || r.id > prev.id) m.set(pid, r)
+  }
+  return m
+})
+const sideBlockKey = (ccyRaw: string | null | undefined, sideRaw: string | null | undefined): string => {
+  const ccy = String(ccyRaw ?? '').trim().toUpperCase()
+  const side = String(sideRaw ?? '').trim().toLowerCase()
+  if (!ccy || (side !== 'long' && side !== 'short')) return ''
+  return `__side_block__:${ccy}:${side}`
+}
+const isSnapshotSideFollowing = (
+  ccyRaw: string | null | undefined,
+  sideRaw: 'long' | 'short',
+): boolean => {
+  const k = sideBlockKey(ccyRaw, sideRaw)
+  if (!k) return true
+  const rec = snapshotFollowSideLatest.value.get(k)
+  return rec?.status !== 'closed'
+}
+const snapshotFollowRunningSideKey = ref<string | null>(null)
 const isSnapshotFollowing = (p: PositionSnapshotRow): boolean => {
   const pid = String(p.pos_id ?? '').trim()
   if (!pid) return true
@@ -1803,6 +1829,43 @@ const onSnapshotFollowToggle = async (p: PositionSnapshotRow, ev: Event) => {
   const checked = (ev.target as HTMLInputElement).checked
   if (checked) await onSnapshotFollowClick(p)
   else await onSnapshotUnfollowClick(p)
+}
+const onSnapshotSideFollowToggle = async (
+  ccyRaw: string | null | undefined,
+  side: 'long' | 'short',
+  ev: Event,
+) => {
+  const un = paramUniqueName.value
+  const ccy = String(ccyRaw ?? '').trim().toUpperCase()
+  const checked = (ev.target as HTMLInputElement).checked
+  if (!un || !ccy) return
+  const k = sideBlockKey(ccy, side)
+  if (!k) return
+  snapshotFollowRunningSideKey.value = k
+  simError.value = ''
+  try {
+    const path = checked ? 'snapshot-follow-side-enable' : 'snapshot-follow-side-stop'
+    const res = await fetch(`${API_BASE}/follow-accounts/${path}`, {
+      method: 'POST',
+      headers: authHeaders(),
+      body: JSON.stringify({
+        unique_name: un,
+        pos_ccy: ccy,
+        pos_side: side,
+      }),
+    })
+    const body = (await res.json().catch(() => ({}))) as { detail?: unknown }
+    if (!res.ok) {
+      const d = body.detail
+      simError.value = typeof d === 'string' ? d : d != null ? JSON.stringify(d) : `更新失败 (${res.status})`
+      return
+    }
+    await loadSimRecords(true)
+  } catch (e: unknown) {
+    simError.value = e instanceof Error ? e.message : '网络错误'
+  } finally {
+    snapshotFollowRunningSideKey.value = null
+  }
 }
 
 const simRecordsSorted = computed(() =>
@@ -2392,6 +2455,7 @@ const eventPnlTone = (e: PositionEventRow): PnlTone => {
                     <th>开仓时间</th>
                     <th>更新时间</th>
                     <th class="nowrap sm">跟单</th>
+                    <th class="nowrap sm">方向跟单</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -2429,6 +2493,34 @@ const eventPnlTone = (e: PositionEventRow): PnlTone => {
                           @change="onSnapshotFollowToggle(row.p, $event)"
                         />
                         <label class="form-check-label" :for="'snapshot-follow-' + row.p.pos_id"></label>
+                      </div>
+                    </td>
+                    <td class="nowrap sm">
+                      <div class="d-inline-flex align-items-center gap-2">
+                        <div class="form-check form-switch mb-0 d-inline-flex align-items-center gap-1">
+                          <input
+                            :id="'snapshot-follow-long-' + row.p.pos_id"
+                            class="form-check-input"
+                            type="checkbox"
+                            role="switch"
+                            :checked="isSnapshotSideFollowing(row.p.pos_ccy, 'long')"
+                            :disabled="snapshotFollowRunningSideKey === sideBlockKey(row.p.pos_ccy, 'long')"
+                            @change="onSnapshotSideFollowToggle(row.p.pos_ccy, 'long', $event)"
+                          />
+                          <label class="form-check-label" :for="'snapshot-follow-long-' + row.p.pos_id">多</label>
+                        </div>
+                        <div class="form-check form-switch mb-0 d-inline-flex align-items-center gap-1">
+                          <input
+                            :id="'snapshot-follow-short-' + row.p.pos_id"
+                            class="form-check-input"
+                            type="checkbox"
+                            role="switch"
+                            :checked="isSnapshotSideFollowing(row.p.pos_ccy, 'short')"
+                            :disabled="snapshotFollowRunningSideKey === sideBlockKey(row.p.pos_ccy, 'short')"
+                            @change="onSnapshotSideFollowToggle(row.p.pos_ccy, 'short', $event)"
+                          />
+                          <label class="form-check-label" :for="'snapshot-follow-short-' + row.p.pos_id">空</label>
+                        </div>
                       </div>
                     </td>
                   </tr>
