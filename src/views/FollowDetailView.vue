@@ -1875,12 +1875,16 @@ const onSnapshotSideFollowToggle = async (
 const pauseSideRecords = computed(() => {
   const rows: Array<{ ccy: string; longPaused: boolean; shortPaused: boolean }> = []
   const by = new Map<string, { ccy: string; longPaused: boolean; shortPaused: boolean }>()
+  const seen = new Set<string>()
   for (const r of simRecords.value) {
     const pid = String(r.pos_id ?? '').trim()
     if (!pid.startsWith('__side_block__:')) continue
     const ccy = String(r.pos_ccy ?? '').trim().toUpperCase()
     const side = String(r.pos_side ?? '').trim().toLowerCase()
     if (!ccy || (side !== 'long' && side !== 'short')) continue
+    const k = `${ccy}:${side}`
+    if (seen.has(k)) continue
+    seen.add(k)
     let g = by.get(ccy)
     if (!g) {
       g = { ccy, longPaused: false, shortPaused: false }
