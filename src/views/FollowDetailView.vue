@@ -1171,22 +1171,33 @@ const saveFollowConfig = async () => {
   configSaving.value = true
   configMsg.value = ''
   try {
+    const normalizeNullableNumber = (v: unknown): number | null => {
+      const n = parseNum(v)
+      return n === null ? null : n
+    }
+    const normalizeNullablePositiveInt = (v: unknown): number | null => {
+      const n = parseNum(v)
+      if (n === null) return null
+      const i = Math.trunc(n)
+      return Number.isFinite(i) && i > 0 ? i : null
+    }
+    const payload = {
+      single_add_margin_usdt: normalizeNullableNumber(followCfg.value.single_add_margin_usdt),
+      max_follow_positions: normalizeNullablePositiveInt(followCfg.value.max_follow_positions),
+      bet_mode: 'cost',
+      margin_add_max_times: normalizeNullablePositiveInt(followCfg.value.margin_add_max_times),
+      maint_margin_ratio_threshold: normalizeNullableNumber(followCfg.value.maint_margin_ratio_threshold),
+      close_margin_ratio_threshold: normalizeNullableNumber(followCfg.value.close_margin_ratio_threshold),
+      take_profit_ratio: normalizeNullableNumber(followCfg.value.take_profit_ratio),
+      stop_loss_ratio: normalizeNullableNumber(followCfg.value.stop_loss_ratio),
+      live_trading_enabled: true,
+      open_by_asset_ratio: false,
+      position_size_coeff: normalizeNullableNumber(followCfg.value.position_size_coeff) ?? 0.1,
+    }
     const res = await fetch(`${API_BASE}/follow-accounts/${c.id}/follow-config`, {
       method: 'PATCH',
       headers: authHeaders(),
-      body: JSON.stringify({
-        single_add_margin_usdt: followCfg.value.single_add_margin_usdt,
-        max_follow_positions: followCfg.value.max_follow_positions,
-        bet_mode: 'cost',
-        margin_add_max_times: followCfg.value.margin_add_max_times,
-        maint_margin_ratio_threshold: followCfg.value.maint_margin_ratio_threshold,
-        close_margin_ratio_threshold: followCfg.value.close_margin_ratio_threshold,
-        take_profit_ratio: followCfg.value.take_profit_ratio,
-        stop_loss_ratio: followCfg.value.stop_loss_ratio,
-        live_trading_enabled: true,
-        open_by_asset_ratio: false,
-        position_size_coeff: followCfg.value.position_size_coeff,
-      }),
+      body: JSON.stringify(payload),
     })
     const data = (await res.json().catch(() => ({}))) as { detail?: string }
     if (!res.ok) {
