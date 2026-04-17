@@ -143,6 +143,7 @@ type FollowSimRecordRow = {
   reduce_position_count?: number
   add_margin_count?: number
   total_invested_usdt?: string
+  live_last_error?: string | null
 }
 
 const props = defineProps<{
@@ -2767,6 +2768,7 @@ const eventPnlTone = (e: PositionEventRow): PnlTone => {
                     <th>加仓次数</th>
                     <th>减仓次数</th>
                     <th>追加保证金次数</th>
+                    <th>最近下单失败原因</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -2786,6 +2788,7 @@ const eventPnlTone = (e: PositionEventRow): PnlTone => {
                     <td class="mono sm">{{ x.rec?.add_position_count ?? 0 }}</td>
                     <td class="mono sm">{{ x.rec?.reduce_position_count ?? 0 }}</td>
                     <td class="mono sm">{{ x.rec?.add_margin_count ?? 0 }}</td>
+                    <td class="sm">{{ x.rec?.live_last_error ?? '—' }}</td>
                   </tr>
                 </tbody>
               </table>
