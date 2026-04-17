@@ -1410,13 +1410,40 @@ const formatTime = (iso: string | null) => {
   return `${v.year}-${v.month}-${v.day} ${v.hour}:${v.minute}:${v.second}`
 }
 
-/** OKX posSide：long→做多，short→做空；其余原样展示 */
-const formatPosSide = (raw: string | null | undefined): string => {
+/**
+ * OKX posSide：long→做多，short→做空。
+ * 若为 net（全仓），按规则结合「标记-开仓」与「upl 正负」推断方向：
+ * - (mark-entry)>0 且 upl>0 => 做多
+ * - (mark-entry)>0 且 upl<0 => 做空
+ * - (mark-entry)<0 且 upl>0 => 做空
+ * - (mark-entry)<0 且 upl<0 => 做多
+ */
+const formatPosSide = (
+  raw: string | null | undefined,
+  ctx?: {
+    avgPx?: string | null
+    markPx?: string | null
+    upl?: string | null
+  },
+): string => {
   if (raw == null || String(raw).trim() === '') return '—'
   const s = String(raw).trim().toLowerCase()
   if (s === 'long') return '做多'
   if (s === 'short') return '做空'
-  return String(raw).trim()
+  if (s !== 'net') return String(raw).trim()
+
+  const avg = Number(String(ctx?.avgPx ?? '').trim())
+  const mark = Number(String(ctx?.markPx ?? '').trim())
+  const upl = Number(String(ctx?.upl ?? '').trim())
+  if (!Number.isFinite(avg) || avg === 0 || !Number.isFinite(mark) || !Number.isFinite(upl) || upl === 0) {
+    return '全仓'
+  }
+
+  const diff = mark - avg
+  if (diff === 0) return '全仓'
+
+  // 同号 => 做多；异号 => 做空
+  return (diff > 0) === (upl > 0) ? '做多' : '做空'
 }
 
 /** 杠杆：空串与 null 统一显示为 —（仅 ?? 无法覆盖 ""） */
@@ -2564,7 +2591,7 @@ const eventPnlTone = (e: PositionEventRow): PnlTone => {
                       <template v-else>{{ row.p.pos_id }}</template>
                     </td>
                     <td>{{ row.p.pos_ccy ?? '—' }}</td>
-                    <td>{{ formatPosSide(row.p.pos_side) }}</td>
+                    <td>{{ formatPosSide(row.p.pos_side, { avgPx: row.p.avg_px, markPx: row.p.last_px, upl: row.p.upl }) }}</td>
                     <td>{{ formatLever(row.p.lever) }}</td>
                     <td :class="uplCellClass(row.p.upl)">{{ formatUplUsdt(row.p.upl) }}</td>
                     <td :class="roiClassFromTone(row.tone)">{{ snapshotRoiDisplay(row.p) }}</td>
@@ -2680,7 +2707,7 @@ const eventPnlTone = (e: PositionEventRow): PnlTone => {
                         <template v-else>{{ pickLinkedStr(row.r, ['posId']) }}</template>
                       </td>
                       <td>{{ instIdBaseCcy(pickLinkedStr(row.r, ['instId'])) }}</td>
-                      <td>{{ formatPosSide(pickLinkedStr(row.r, ['posSide'])) }}</td>
+                      <td>{{ formatPosSide(pickLinkedStr(row.r, ['posSide']), { avgPx: pickLinkedStr(row.r, ['avgPx']) === '—' ? null : pickLinkedStr(row.r, ['avgPx']), markPx: pickLinkedStr(row.r, ['markPx', 'last']) === '—' ? null : pickLinkedStr(row.r, ['markPx', 'last']), upl: pickLinkedStr(row.r, ['upl']) === '—' ? null : pickLinkedStr(row.r, ['upl']) }) }}</td>
                       <td>{{ formatLever(pickLinkedStr(row.r, ['lever'])) }}</td>
                       <td :class="roiClassFromTone(row.tone)">{{
                         formatUplUsdt(pickLinkedStr(row.r, ['upl']))
@@ -2753,7 +2780,7 @@ const eventPnlTone = (e: PositionEventRow): PnlTone => {
                       <template v-else>{{ x.row.p.pos_id }}</template>
                     </td>
                     <td>{{ x.row.p.pos_ccy ?? '—' }}</td>
-                    <td>{{ formatPosSide(x.row.p.pos_side) }}</td>
+                    <td>{{ formatPosSide(x.row.p.pos_side, { avgPx: x.row.p.avg_px, markPx: x.row.p.last_px, upl: x.row.p.upl }) }}</td>
                     <td>{{ formatLever(x.row.p.lever) }}</td>
                     <td class="mono sm">{{ formatUsdt3(x.rec?.stake_usdt ?? '0') }}</td>
                     <td class="mono sm">{{ x.rec?.add_position_count ?? 0 }}</td>
@@ -2818,7 +2845,7 @@ const eventPnlTone = (e: PositionEventRow): PnlTone => {
                       <template v-else>{{ e.pos_id ?? '—' }}</template>
                     </td>
                     <td>{{ e.pos_ccy ?? '—' }}</td>
-                    <td>{{ formatPosSide(e.pos_side) }}</td>
+                    <td>{{ formatPosSide(e.pos_side, { avgPx: e.avg_px, markPx: eventMarkPx(e) === '—' ? null : String(eventMarkPx(e)), upl: eventUplRaw(e) }) }}</td>
                     <td>{{ formatLever(e.lever) }}</td>
                     <td class="mono sm two-line-cell">
                       <div>{{ formatAvgPx2(e.avg_px) }}</div>
