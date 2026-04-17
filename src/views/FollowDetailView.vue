@@ -1666,6 +1666,11 @@ const snapshotFollowSideLatest = computed(() => {
   }
   return m
 })
+type PauseFollowSide = 'long' | 'short'
+const pauseCfgCcyInput = ref('')
+const pauseCfgSideInput = ref<PauseFollowSide>('long')
+const pauseCfgSaving = ref(false)
+const pauseCfgMsg = ref('')
 const sideBlockKey = (ccyRaw: string | null | undefined, sideRaw: string | null | undefined): string => {
   const ccy = String(ccyRaw ?? '').trim().toUpperCase()
   const side = String(sideRaw ?? '').trim().toLowerCase()
@@ -1865,6 +1870,91 @@ const onSnapshotSideFollowToggle = async (
     simError.value = e instanceof Error ? e.message : '网络错误'
   } finally {
     snapshotFollowRunningSideKey.value = null
+  }
+}
+const pauseSideRecords = computed(() => {
+  const rows: Array<{ ccy: string; longPaused: boolean; shortPaused: boolean }> = []
+  const by = new Map<string, { ccy: string; longPaused: boolean; shortPaused: boolean }>()
+  for (const r of simRecords.value) {
+    const pid = String(r.pos_id ?? '').trim()
+    if (!pid.startsWith('__side_block__:')) continue
+    const ccy = String(r.pos_ccy ?? '').trim().toUpperCase()
+    const side = String(r.pos_side ?? '').trim().toLowerCase()
+    if (!ccy || (side !== 'long' && side !== 'short')) continue
+    let g = by.get(ccy)
+    if (!g) {
+      g = { ccy, longPaused: false, shortPaused: false }
+      by.set(ccy, g)
+    }
+    const paused = r.status === 'closed'
+    if (side === 'long') g.longPaused = paused
+    else g.shortPaused = paused
+  }
+  for (const v of by.values()) rows.push(v)
+  rows.sort((a, b) => a.ccy.localeCompare(b.ccy, 'en', { sensitivity: 'base' }))
+  return rows
+})
+const savePauseFollowConfig = async () => {
+  const un = paramUniqueName.value
+  const ccy = pauseCfgCcyInput.value.trim().toUpperCase()
+  const side = pauseCfgSideInput.value
+  if (!un || !ccy) {
+    pauseCfgMsg.value = '请先填写币种'
+    return
+  }
+  pauseCfgSaving.value = true
+  pauseCfgMsg.value = ''
+  try {
+    const res = await fetch(`${API_BASE}/follow-accounts/snapshot-follow-side-stop`, {
+      method: 'POST',
+      headers: authHeaders(),
+      body: JSON.stringify({
+        unique_name: un,
+        pos_ccy: ccy,
+        pos_side: side,
+      }),
+    })
+    const body = (await res.json().catch(() => ({}))) as { detail?: unknown }
+    if (!res.ok) {
+      const d = body.detail
+      pauseCfgMsg.value = typeof d === 'string' ? d : d != null ? JSON.stringify(d) : `保存失败 (${res.status})`
+      return
+    }
+    pauseCfgMsg.value = '已保存'
+    await loadSimRecords(true)
+  } catch (e: unknown) {
+    pauseCfgMsg.value = e instanceof Error ? e.message : '网络错误'
+  } finally {
+    pauseCfgSaving.value = false
+  }
+}
+const removePauseFollowSide = async (ccy: string, side: PauseFollowSide) => {
+  const un = paramUniqueName.value
+  if (!un) return
+  pauseCfgSaving.value = true
+  pauseCfgMsg.value = ''
+  try {
+    const res = await fetch(`${API_BASE}/follow-accounts/snapshot-follow-side-enable`, {
+      method: 'POST',
+      headers: authHeaders(),
+      body: JSON.stringify({
+        unique_name: un,
+        pos_ccy: ccy,
+        pos_side: side,
+      }),
+    })
+    const body = (await res.json().catch(() => ({}))) as { detail?: unknown }
+    if (!res.ok) {
+      const d = body.detail
+      pauseCfgMsg.value = typeof d === 'string' ? d : d != null ? JSON.stringify(d) : `删除失败 (${res.status})`
+      return
+    }
+    pauseCfgMsg.value = '已删除'
+    await loadSimRecords(true)
+  } catch (e: unknown) {
+    pauseCfgMsg.value = e instanceof Error ? e.message : '网络错误'
+  } finally {
+    pauseCfgSaving.value = false
   }
 }
 
@@ -2454,8 +2544,6 @@ const eventPnlTone = (e: PositionEventRow): PnlTone => {
                     <th>标记价格</th>
                     <th>开仓时间</th>
                     <th>更新时间</th>
-                    <th class="nowrap sm">跟单</th>
-                    <th class="nowrap sm">方向跟单</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -2481,48 +2569,6 @@ const eventPnlTone = (e: PositionEventRow): PnlTone => {
                     <td class="mono sm mark-col">{{ row.p.last_px ?? '—' }}</td>
                     <td class="nowrap sm">{{ row.p.c_time_format ?? '—' }}</td>
                     <td class="nowrap sm">{{ formatTime(snapshot.refreshed_at) }}</td>
-                    <td class="nowrap sm">
-                      <div class="form-check form-switch mb-0 d-inline-flex align-items-center gap-1">
-                        <input
-                          :id="'snapshot-follow-' + row.p.pos_id"
-                          class="form-check-input"
-                          type="checkbox"
-                          role="switch"
-                          :checked="isSnapshotFollowing(row.p)"
-                          :disabled="snapshotFollowRunningPosId === row.p.pos_id"
-                          @change="onSnapshotFollowToggle(row.p, $event)"
-                        />
-                        <label class="form-check-label" :for="'snapshot-follow-' + row.p.pos_id"></label>
-                      </div>
-                    </td>
-                    <td class="nowrap sm">
-                      <div class="d-inline-flex align-items-center gap-2">
-                        <div class="form-check form-switch mb-0 d-inline-flex align-items-center gap-1">
-                          <input
-                            :id="'snapshot-follow-long-' + row.p.pos_id"
-                            class="form-check-input"
-                            type="checkbox"
-                            role="switch"
-                            :checked="isSnapshotSideFollowing(row.p.pos_ccy, 'long')"
-                            :disabled="snapshotFollowRunningSideKey === sideBlockKey(row.p.pos_ccy, 'long')"
-                            @change="onSnapshotSideFollowToggle(row.p.pos_ccy, 'long', $event)"
-                          />
-                          <label class="form-check-label" :for="'snapshot-follow-long-' + row.p.pos_id">多</label>
-                        </div>
-                        <div class="form-check form-switch mb-0 d-inline-flex align-items-center gap-1">
-                          <input
-                            :id="'snapshot-follow-short-' + row.p.pos_id"
-                            class="form-check-input"
-                            type="checkbox"
-                            role="switch"
-                            :checked="isSnapshotSideFollowing(row.p.pos_ccy, 'short')"
-                            :disabled="snapshotFollowRunningSideKey === sideBlockKey(row.p.pos_ccy, 'short')"
-                            @change="onSnapshotSideFollowToggle(row.p.pos_ccy, 'short', $event)"
-                          />
-                          <label class="form-check-label" :for="'snapshot-follow-short-' + row.p.pos_id">空</label>
-                        </div>
-                      </div>
-                    </td>
                   </tr>
                 </tbody>
               </table>
@@ -3179,6 +3225,88 @@ const eventPnlTone = (e: PositionEventRow): PnlTone => {
                     <span v-if="configMsg" class="small text-muted">{{ configMsg }}</span>
                   </div>
                 </form>
+              </section>
+
+              <section class="config-card card-block">
+                <h2 class="mb-3 detail-panel-title">
+                  <span class="btn btn-warning">暂停跟单配置</span>
+                </h2>
+                <form class="follow-config-form" @submit.prevent="savePauseFollowConfig">
+                  <div class="mb-2">
+                    <label class="form-label mb-1" for="pause-ccy">币种</label>
+                    <input
+                      id="pause-ccy"
+                      v-model.trim="pauseCfgCcyInput"
+                      type="text"
+                      class="form-control form-control-sm"
+                      placeholder="例如 BTC"
+                    />
+                  </div>
+                  <div class="mb-2">
+                    <label class="form-label mb-1" for="pause-side">方向</label>
+                    <select
+                      id="pause-side"
+                      v-model="pauseCfgSideInput"
+                      class="form-select form-select-sm"
+                    >
+                      <option value="long">多</option>
+                      <option value="short">空</option>
+                    </select>
+                  </div>
+                  <button type="submit" class="btn btn-sm btn-primary" :disabled="pauseCfgSaving">
+                    {{ pauseCfgSaving ? '保存中…' : '添加暂停配置' }}
+                  </button>
+                  <div
+                    v-if="pauseCfgMsg"
+                    class="small mt-2"
+                    :class="pauseCfgMsg.includes('失败') || pauseCfgMsg.includes('错误') ? 'text-danger' : 'text-success'"
+                  >
+                    {{ pauseCfgMsg }}
+                  </div>
+                </form>
+                <div class="table-responsive mt-3" v-if="pauseSideRecords.length > 0">
+                  <table class="table table-sm table-bordered align-middle mb-0 linked-okx-table">
+                    <thead class="table-light">
+                      <tr>
+                        <th>币种</th>
+                        <th>暂停做多</th>
+                        <th>暂停做空</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr v-for="row in pauseSideRecords" :key="'pause-side-' + row.ccy">
+                        <td class="mono">{{ row.ccy }}</td>
+                        <td>
+                          <span v-if="row.longPaused" class="badge text-bg-warning me-2">已暂停</span>
+                          <button
+                            v-if="row.longPaused"
+                            type="button"
+                            class="btn btn-sm btn-outline-danger"
+                            :disabled="pauseCfgSaving"
+                            @click="removePauseFollowSide(row.ccy, 'long')"
+                          >
+                            删除
+                          </button>
+                          <span v-else class="text-muted small">—</span>
+                        </td>
+                        <td>
+                          <span v-if="row.shortPaused" class="badge text-bg-warning me-2">已暂停</span>
+                          <button
+                            v-if="row.shortPaused"
+                            type="button"
+                            class="btn btn-sm btn-outline-danger"
+                            :disabled="pauseCfgSaving"
+                            @click="removePauseFollowSide(row.ccy, 'short')"
+                          >
+                            删除
+                          </button>
+                          <span v-else class="text-muted small">—</span>
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+                <p v-else class="small text-muted mb-0 mt-2">暂无暂停配置</p>
               </section>
           </div>
         </div>
