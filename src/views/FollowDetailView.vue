@@ -1678,20 +1678,24 @@ const myPositionOrderErrorLines = computed(() => {
   }
   if (ccySet.size === 0) return [] as string[]
 
-  const latestByCcy = new Map<string, { id: number; msg: string }>()
+  // 先按币种拿“最新一条记录”，再决定是否展示错误，
+  // 避免旧失败记录覆盖新成功状态（已清空 live_last_error）。
+  const latestByCcy = new Map<string, FollowSimRecordRow>()
   for (const r of simRecords.value) {
-    const msg = String(r.live_last_error ?? '').trim()
-    if (!msg) continue
     const ccy = String(r.pos_ccy ?? '').trim().toUpperCase()
     if (!ccy || !ccySet.has(ccy)) continue
     const prev = latestByCcy.get(ccy)
-    if (!prev || r.id > prev.id) latestByCcy.set(ccy, { id: r.id, msg })
+    if (!prev || r.id > prev.id) latestByCcy.set(ccy, r)
   }
   if (latestByCcy.size === 0) return [] as string[]
 
   return [...latestByCcy.entries()]
     .sort((a, b) => a[0].localeCompare(b[0], 'en', { sensitivity: 'base' }))
-    .map(([ccy, v]) => `${ccy}：${v.msg}`)
+    .map(([ccy, r]) => {
+      const msg = String(r.live_last_error ?? '').trim()
+      return msg ? `${ccy}：${msg}` : ''
+    })
+    .filter((s) => s.length > 0)
 })
 
 /** 跟单记录：当前页内按币种排序（与持仓一致） */
