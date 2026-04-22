@@ -1812,6 +1812,55 @@ const onPositionActionClick = async (
   }
 }
 
+const myPosActionRunningKey = ref<string | null>(null)
+const linkedPosActionSide = (r: Record<string, unknown>): 'long' | 'short' | null => {
+  const raw = pickLinkedStr(r, ['posSide']).toLowerCase()
+  if (raw === 'long' || raw === 'short') return raw
+  const posRaw = pickLinkedStr(r, ['pos'])
+  const n = Number(String(posRaw).trim().replace(/,/g, ''))
+  if (!Number.isFinite(n) || Math.abs(n) <= 1e-12) return null
+  return n > 0 ? 'long' : 'short'
+}
+const onMyPositionActionClick = async (
+  action: 'reduce' | 'close',
+  r: Record<string, unknown>,
+) => {
+  const un = paramUniqueName.value
+  const posCcy = instIdBaseCcy(pickLinkedStr(r, ['instId'])).toUpperCase()
+  const posSide = linkedPosActionSide(r)
+  if (!un || !posCcy || posCcy === '—' || !posSide) {
+    simError.value = '当前持仓方向或币种无效，无法执行该操作'
+    return
+  }
+  const key = `${posCcy}:${posSide}:${action}`
+  myPosActionRunningKey.value = key
+  simError.value = ''
+  try {
+    const res = await fetch(`${API_BASE}/follow-accounts/position-action`, {
+      method: 'POST',
+      headers: authHeaders(),
+      body: JSON.stringify({
+        unique_name: un,
+        sim_record_id: null,
+        pos_ccy: posCcy,
+        pos_side: posSide,
+        action,
+      }),
+    })
+    const body = (await res.json().catch(() => ({}))) as { detail?: unknown }
+    if (!res.ok) {
+      const d = body.detail
+      simError.value = typeof d === 'string' ? d : d != null ? JSON.stringify(d) : `操作失败 (${res.status})`
+      return
+    }
+    await Promise.all([loadSimRecords(true), loadLinkedOkxTradeData(true)])
+  } catch (e: unknown) {
+    simError.value = e instanceof Error ? e.message : '网络错误'
+  } finally {
+    myPosActionRunningKey.value = null
+  }
+}
+
 const hasLinkedPositionForRecord = (r: FollowSimRecordRow): boolean => {
   const ccy = String(r.pos_ccy ?? '').trim().toUpperCase()
   if (!ccy) return false
@@ -2721,6 +2770,7 @@ const eventPnlTone = (e: PositionEventRow): PnlTone => {
                       <th>预估强平价</th>
                       <th>开仓时间</th>
                       <th>更新时间</th>
+                      <th>操作</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -2763,6 +2813,26 @@ const eventPnlTone = (e: PositionEventRow): PnlTone => {
                       <td class="nowrap sm">{{
                         linkedOkxFetchedAt ? formatTime(linkedOkxFetchedAt) : '—'
                       }}</td>
+                      <td class="nowrap sm">
+                        <div class="d-flex gap-1">
+                          <button
+                            type="button"
+                            class="btn btn-xs btn-outline-warning"
+                            :disabled="myPosActionRunningKey !== null"
+                            @click="onMyPositionActionClick('reduce', row.r)"
+                          >
+                            减仓
+                          </button>
+                          <button
+                            type="button"
+                            class="btn btn-xs btn-outline-danger"
+                            :disabled="myPosActionRunningKey !== null"
+                            @click="onMyPositionActionClick('close', row.r)"
+                          >
+                            平仓
+                          </button>
+                        </div>
+                      </td>
                     </tr>
                   </tbody>
                 </table>
