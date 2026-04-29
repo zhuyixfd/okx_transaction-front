@@ -5,7 +5,7 @@ import { RouterLink, useRouter } from 'vue-router'
 const router = useRouter()
 
 const API_BASE =
-  (import.meta.env.VITE_API_BASE_URL as string | undefined) || 'http://localhost:8000'
+  (import.meta.env.VITE_API_BASE_URL as string | undefined) || '/api'
 
 type FollowRow = {
   id: number

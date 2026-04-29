@@ -3,7 +3,7 @@ import { onMounted, ref } from 'vue'
 import { RouterLink } from 'vue-router'
 
 const API_BASE =
-  (import.meta.env.VITE_API_BASE_URL as string | undefined) || 'http://localhost:8000'
+  (import.meta.env.VITE_API_BASE_URL as string | undefined) || '/api'
 
 const authHeaders = (): HeadersInit => {
   const h: Record<string, string> = { 'Content-Type': 'application/json' }
